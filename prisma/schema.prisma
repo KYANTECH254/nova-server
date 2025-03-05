@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @unique
+  phone     String
+  username  String?
+  password  String?
+  code      String   @default("null")
+  token     String?  @unique @default("null")
+  createdAt DateTime
+  updatedAt DateTime
+}
+
+model Mpesa {
+  id        String   @unique
+  code      String   @unique
+  phone     String
+  status    String
+  createdAt DateTime
+  updatedAt DateTime
+}
+
+model Admin {
+  id        String   @unique
+  name      String?
+  email     String   @unique
+  phone     String?
+  adminID   String   @unique
+  token     String   @unique
+  password  String   @default("null")
+  createdAt DateTime
+  updatedAt DateTime
+}
+
+model Package {
+  id         String   @unique
+  name       String
+  period     String
+  price      String
+  speed      String
+  adminID    String
+  platformID String
+  createdAt  DateTime
+  updatedAt  DateTime
+}
+
+model SuperUser {
+  id        String   @unique
+  name      String?
+  email     String   @unique
+  phone     String?
+  token     String   @unique
+  password  String   @default("null")
+  createdAt DateTime
+  updatedAt DateTime
+}
+
+model Platform {
+  id         String   @unique
+  name       String
+  platformID String   @unique
+  adminID    String
+  createdAt  DateTime
+  updatedAt  DateTime
+}
+
+model PlatformSetting {
+  id                  String   @unique
+  platformID          String   @unique
+  adminID             String
+  mpesaTill           String?  @default("null")
+  mpesaPaybill        String?  @default("null")
+  mpesaConsumerKey    String?
+  mpesaConsumerSecret String?
+  mpesaShortCode      String?
+  mpesaPassKey        String?
+  mikrotikHost        String?
+  mikrotikUser        String?
+  mikrotikPassword    String?
+  createdAt           DateTime
+  updatedAt           DateTime
+}
