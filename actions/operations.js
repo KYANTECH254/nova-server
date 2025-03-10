@@ -1,4 +1,6 @@
-const prisma = require("../prisma")
+const prisma = require("../prisma");
+const now = new Date();
+const offsetDate = new Date(now.toLocaleString("en-US", { timeZone: "Africa/Nairobi" }));
 
 async function getPlatformConfig(platformID) {
   try {
@@ -21,7 +23,10 @@ async function updatePlatformConfig(platformID, data) {
   try {
     const config = await prisma.platformSetting.update({
       where: { platformID },
-      data
+      data: {
+        ...data,
+        updatedAt: offsetDate
+      }
     });
 
     return config;
@@ -47,7 +52,9 @@ async function createPlatformConfig(platformID, data) {
     const config = await prisma.platformSetting.create({
       data: {
         platformID,
-        ...data
+        ...data,
+        createdAt: offsetDate,
+        updatedAt: offsetDate
       }
     });
 
@@ -58,9 +65,11 @@ async function createPlatformConfig(platformID, data) {
   }
 }
 
-async function getSuperUser() {
+async function getSuperUser(data) {
   try {
-    const superUser = await prisma.superUser.findFirst();
+    const superUser = await prisma.superUser.findUnique({
+      where: { email: data.email }
+    });
     return superUser;
   } catch (error) {
     console.error('Error fetching super user:', error);
@@ -71,7 +80,11 @@ async function getSuperUser() {
 async function createSuperUser(data) {
   try {
     const superUser = await prisma.superUser.create({
-      data
+      data: {
+        ...data,
+        createdAt: offsetDate,
+        updatedAt: offsetDate
+      }
     });
     return superUser;
   } catch (error) {
@@ -84,7 +97,10 @@ async function updateSuperUser(data) {
   try {
     const superUser = await prisma.superUser.update({
       where: { id: data.id },
-      data
+      data: {
+        ...data,
+        updatedAt: offsetDate
+      }
     });
     return superUser;
   } catch (error) {
@@ -108,7 +124,11 @@ async function deleteSuperUser(id) {
 async function createUser(data) {
   try {
     const user = await prisma.user.create({
-      data
+      data: {
+        ...data,
+        createdAt: offsetDate,
+        updatedAt: offsetDate
+      }
     });
     return user;
   } catch (error) {
@@ -121,7 +141,10 @@ async function updateUser(id, data) {
   try {
     const user = await prisma.user.update({
       where: { id },
-      data
+      data: {
+        ...data,
+        updatedAt: offsetDate
+      }
     });
     return user;
   } catch (error) {
@@ -144,8 +167,13 @@ async function deleteUser(id) {
 
 async function addMpesaCode(data) {
   try {
-    const mpesaCode = await prisma.mpesaCode.create({
-      data
+    const mpesaCode = await prisma.mpesa.create({
+      data: {
+        ...data,
+        createdAt: offsetDate,
+        updatedAt: offsetDate
+      }
+
     });
     return mpesaCode;
   } catch (error) {
@@ -154,11 +182,14 @@ async function addMpesaCode(data) {
   }
 }
 
-async function updateMpesaCode(id, data) {
+async function updateMpesaCode(code, data) {
   try {
-    const mpesaCode = await prisma.mpesaCode.update({
-      where: { id },
-      data
+    const mpesaCode = await prisma.mpesa.update({
+      where: { code },
+      data : {
+        ...data,
+        updatedAt: offsetDate
+      }
     });
     return mpesaCode;
   } catch (error) {
@@ -167,10 +198,26 @@ async function updateMpesaCode(id, data) {
   }
 }
 
+async function deleteMpesaCode(code) {
+  try {
+    const mpesaCode = await prisma.mpesa.delete({
+      where: { code }
+    });
+    return mpesaCode;
+  } catch (error) {
+    console.error('Error deleting mpesa code:', error);
+    throw error;
+  }
+}
+
 async function createAdmin(data) {
   try {
     const admin = await prisma.admin.create({
-      data
+      data:{
+        ...data,
+        createdAt: offsetDate,
+      updatedAt: offsetDate
+      }
     });
     return admin;
   } catch (error) {
@@ -183,7 +230,12 @@ async function updateAdmin(id, data) {
   try {
     const admin = await prisma.admin.update({
       where: { id },
-      data
+      data:{
+        ...data,
+        createdAt: offsetDate,
+      updatedAt: offsetDate
+      }
+      
     });
     return admin;
   } catch (error) {
@@ -207,7 +259,12 @@ async function deleteAdmin(id) {
 async function createPackage(data) {
   try {
     const package = await prisma.package.create({
-      data
+      data: {
+        ...data,
+        createdAt: offsetDate,
+      updatedAt: offsetDate
+      }
+      
     });
     return package;
   } catch (error) {
@@ -220,7 +277,10 @@ async function updatePackage(id, data) {
   try {
     const package = await prisma.package.update({
       where: { id },
-      data
+      data :{
+        ...data,
+        updatedAt: offsetDate
+      }
     });
     return package;
   } catch (error) {
@@ -265,32 +325,39 @@ async function deletePackage(id) {
   }
 }
 
-async function createPlatform (data) {
+async function createPlatform(data) {
   try {
     const platform = await prisma.platform.create({
-      data
+      data: {
+        ...data,
+        createdAt: offsetDate,
+        updatedAt: offsetDate
+      }
     });
     return platform;
   } catch (error) {
-    console.error('Error creating platform:', error);
+    console.error("Error creating platform:", error);
     throw error;
   }
 }
 
-async function updatePlatform (id, data) {
+async function updatePlatform(id, data) {
   try {
     const platform = await prisma.platform.update({
       where: { id },
-      data
+      data: {
+        ...data,
+        updatedAt: offsetDate,
+      }
     });
     return platform;
   } catch (error) {
     console.error('Error updating platform:', error);
     throw error;
   }
-} 
+}
 
-async function deletePlatform (id) {
+async function deletePlatform(id) {
   try {
     const platform = await prisma.platform.delete({
       where: { id }
@@ -302,7 +369,7 @@ async function deletePlatform (id) {
   }
 }
 
-async function getPlatform (platformID) {
+async function getPlatform(platformID) {
   try {
     const platform = await prisma.platform.findUnique({
       where: { platformID }
@@ -314,4 +381,31 @@ async function getPlatform (platformID) {
   }
 }
 
-module.exports = { getPlatformConfig, updatePlatformConfig, deletePlatformConfig, createPlatformConfig, getSuperUser, createSuperUser, updateSuperUser, deleteSuperUser, createUser, updateUser, deleteUser };
+module.exports = {
+  getPlatformConfig,
+  updatePlatformConfig,
+  deletePlatformConfig,
+  createPlatformConfig,
+  getSuperUser,
+  createSuperUser,
+  updateSuperUser,
+  deleteSuperUser,
+  createUser,
+  updateUser,
+  deleteUser,
+  addMpesaCode,
+  updateMpesaCode,
+  deleteMpesaCode,
+  createAdmin,
+  updateAdmin,
+  deleteAdmin,
+  createPackage,
+  updatePackage,
+  getPackage,
+  getPackages,
+  deletePackage,
+  createPlatform,
+  updatePlatform,
+  deletePlatform,
+  getPlatform
+};

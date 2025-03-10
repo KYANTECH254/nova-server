@@ -1,5 +1,5 @@
 const express = require("express");
-const { stkPush, callBack } = require("../controllers/mpesaControllers");
+const { stkPush, callBack, getAccessToken } = require("../controllers/mpesaControllers");
 
 const router = express.Router();
 

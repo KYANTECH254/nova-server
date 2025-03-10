@@ -8,71 +8,71 @@ datasource db {
 }
 
 model User {
-  id        String   @unique
+  id        String   @unique @default(uuid())
   phone     String
   username  String?
   password  String?
   code      String   @default("null")
   token     String?  @unique @default("null")
-  createdAt DateTime
-  updatedAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Mpesa {
-  id        String   @unique
+  id        String   @unique @default(uuid())
   code      String   @unique
   phone     String
   status    String
-  createdAt DateTime
-  updatedAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Admin {
-  id        String   @unique
+  id        String   @unique @default(uuid())
   name      String?
   email     String   @unique
   phone     String?
   adminID   String   @unique
   token     String   @unique
   password  String   @default("null")
-  createdAt DateTime
-  updatedAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Package {
-  id         String   @unique
+  id         String   @unique @default(uuid())
   name       String
   period     String
   price      String
   speed      String
   adminID    String
   platformID String
-  createdAt  DateTime
-  updatedAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model SuperUser {
-  id        String   @unique
+  id        String   @unique @default(uuid())
   name      String?
   email     String   @unique
   phone     String?
   token     String   @unique
   password  String   @default("null")
-  createdAt DateTime
-  updatedAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Platform {
-  id         String   @unique
+  id         String   @unique @default(uuid())
   name       String
   platformID String   @unique
   adminID    String
-  createdAt  DateTime
-  updatedAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model PlatformSetting {
-  id                  String   @unique
+  id                  String   @unique @default(uuid())
   platformID          String   @unique
   adminID             String
   mpesaTill           String?  @default("null")
@@ -84,6 +84,6 @@ model PlatformSetting {
   mikrotikHost        String?
   mikrotikUser        String?
   mikrotikPassword    String?
-  createdAt           DateTime
-  updatedAt           DateTime
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }

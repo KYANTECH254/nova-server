@@ -1,6 +1,9 @@
 const { PrismaClient } = require("@prisma/client");
-require("dotenv").config();
+let prisma;
 
-// Initialize Prisma
-const prisma = new PrismaClient();
+if (!global.prisma) {
+    global.prisma = new PrismaClient();
+}
+prisma = global.prisma;
+
 module.exports = prisma;
