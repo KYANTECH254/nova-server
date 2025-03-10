@@ -9,7 +9,7 @@ app.use(express.json());
 
 app.use(express.static(path.join(__dirname, "public")));
 
-app.use("/api/mkt", mikrotikRoutes);
+app.use("/mkt", mikrotikRoutes);
 app.use("/mpesa", mpesaRoutes);
 
 app.get("/", (req, res) => {
