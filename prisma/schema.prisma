@@ -8,14 +8,18 @@ datasource db {
 }
 
 model User {
-  id        String   @unique @default(uuid())
-  phone     String
-  username  String?
-  password  String?
-  code      String   @default("null")
-  token     String?  @unique @default("null")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid())
+  phone       String
+  username    String?
+  password    String?
+  status      String   @default("inactive")
+  code        String   @default("null")
+  token       String?  @unique
+  platformID  String
+  packageID   String? 
+  package     Package? @relation(fields: [packageID], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Mpesa {
@@ -40,13 +44,15 @@ model Admin {
 }
 
 model Package {
-  id         String   @unique @default(uuid())
+  id         String   @id @default(uuid())
   name       String
   period     String
   price      String
   speed      String
+  devices    String
   adminID    String
   platformID String
+  users      User[] 
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }

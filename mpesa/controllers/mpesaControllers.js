@@ -1,14 +1,15 @@
 const axios = require('axios');
 const moment = require('moment');
-const fs = require('fs');
-const { MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, MPESA_SHORTCODE, MPESA_PASSKEY, MPESA_CALLBACK_URL } = require('../config/mpesaConfig');
-const { addMpesaCode, updateMpesaCode } = require("../../actions/operations")
+const { MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, MPESA_SHORTCODE, MPESA_PASSKEY, MPESA_CALLBACK_URL, MPESA_STK_URL, MPESA_AUTH_URL } = require('../config/mpesaConfig');
+const { addMpesaCode, updateMpesaCode, createUser, getPackage, updateUser } = require("../../actions/operations");
+const { emitEvent } = require("../../socket/controllers/socketController");
+const { manageMikrotikUser } = require("../../mikrotik/contollers/mikrotikController");
 
 const getAccessToken = async () => {
     try {
         console.log("Mpesa Shortcode:", MPESA_SHORTCODE, "Mpesa Consumer Key:", MPESA_CONSUMER_KEY, "Mpesa Consumer Secret:", MPESA_CONSUMER_SECRET, "Mpesa Passkey", MPESA_PASSKEY, "Callback URL:", MPESA_CALLBACK_URL);
         const response = await axios.get(
-            'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials',
+            MPESA_AUTH_URL,
             {
                 auth: {
                     username: MPESA_CONSUMER_KEY,
@@ -31,7 +32,7 @@ const formatPhoneNumber = (phone) => {
 };
 
 const stkPush = async (req, res) => {
-    const { phone, amount } = req.body;
+    const { phone, amount, package } = req.body;
     if (!phone || !amount) {
         return res.status(400).json({ type: "error", message: "Phone number and amount are required." });
     }
@@ -39,8 +40,10 @@ const stkPush = async (req, res) => {
         const accessToken = await getAccessToken();
         const timestamp = moment().format('YYYYMMDDHHmmss');
         const password = Buffer.from(`${MPESA_SHORTCODE}${MPESA_PASSKEY}${timestamp}`).toString('base64');
+        console.log(formatPhoneNumber(phone));
+        
         const response = await axios.post(
-            'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest',
+            MPESA_STK_URL,
             {
                 BusinessShortCode: MPESA_SHORTCODE,
                 Password: password,
@@ -69,8 +72,16 @@ const stkPush = async (req, res) => {
                 phone: phone,
                 status: "PENDING"
             }
+            const userData = {
+                token:response.data.CheckoutRequestID,
+                phone: phone,
+                package: package,
+                status: "inactive",
+                platformID: package.platformID
+            }
             const addMpesaCodeTodb = await addMpesaCode(mpesaCode);
-            if (addMpesaCodeTodb) {
+            const addUserTodb = await createUser(userData);
+            if (addMpesaCodeTodb && addUserTodb) {
                 return res.status(200).json({ type: "success", message: "STK Push initiated successfully", data: response.data });
             }
         }
@@ -81,8 +92,6 @@ const stkPush = async (req, res) => {
 };
 
 const callBack = async (req, res) => {
-    console.log("Received M-Pesa Callback");
-
     let callbackData = req.body;
 
     if (callbackData.Body.stkCallback) {
@@ -99,32 +108,63 @@ const callBack = async (req, res) => {
                 transactionDate: stkCallback.CallbackMetadata.Item.find(item => item.Name === "TransactionDate").Value
             };
 
-            console.log("Transaction Successful:", transactionDetails);
+            const user = await getUserByToken(transactionDetails.checkoutRequestId);
 
+            if (!user) {
+                return res.status(404).json({ type: "error", message: "User not found!" });
+            }
+
+            if (parseFloat(transactionDetails.amount) !== parseFloat(user.package.price)) {
+                return res.status(400).json({ type: "error", message: "Invalid operation!" });
+            }
+            const package = await getPackage(user.packageID);
+            if (package.price !== transactionDetails.amount) {
+                return res.status(400).json({ type: "error", message: "Invalid operation!" });
+            }
             const mpesaCode = {
                 code: transactionDetails.mpesaReceiptNumber,
                 phone: transactionDetails.phoneNumber,
                 status: "SUCCESS"
-            }
-            const updateMpesaCodeTodb = await updateMpesaCode(transactionDetails.checkoutRequestId, mpesaCode);
-            if (updateMpesaCodeTodb) {
-                return res.status(200).json({ type: "success", message: "Transaction successful", data: transactionDetails });
-            }
+            };
+            await updateMpesaCode(transactionDetails.checkoutRequestId, mpesaCode);
+            await updateUser(user.id, "active");
+
+            const mikrotikUser = await manageMikrotikUser({
+                platformID: user.platformID,
+                action: "add",
+                package:package
+            });
+
+            // Send User Data to Client via WebSocket
+            emitEvent("payment-confirmed", {
+                phone: transactionDetails.phoneNumber,
+                message: "Payment Successful!",
+                transactionDetails,
+                mikrotikUser
+            });
+
+            return res.status(200).json({ type: "success", message: "Transaction successful", data: transactionDetails });
         } else {
+            // Payment Failed
             const mpesaCode = {
                 code: stkCallback.CheckoutRequestID,
                 status: "FAILED"
-            }
-            const updateMpesaCodeTodb = await updateMpesaCode(stkCallback.CheckoutRequestID, mpesaCode);
-            if (updateMpesaCodeTodb) {
-                console.log("Transaction Failed:", stkCallback);
-                return res.status(200).json({ type: "error", message: "Transaction not successful", data: transactionDetails });
-            }
+            };
+            await updateMpesaCode(stkCallback.CheckoutRequestID, mpesaCode);
+
+            emitEvent("payment-failed", {
+                phone: stkCallback.PhoneNumber,
+                message: "Payment Failed!",
+            });
+
+            console.log("Transaction Failed:", stkCallback);
+            return res.status(400).json({ type: "error", message: "Transaction not successful" });
         }
     }
 
     res.status(200).send("Callback received");
 };
+
 
 
 module.exports = { stkPush, callBack };

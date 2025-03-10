@@ -4,12 +4,37 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Server Status</title>
+    <link rel="shortcut icon" href="smile-favicon.ico" type="image/x-icon">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
 <body class="bg-black flex items-center justify-center h-screen">
     <div class="bg-gray-900 text-white p-6 rounded-2xl shadow-lg text-center">
-        <h1 class="text-2xl font-bold">Server Running</h1>
-        <p class="text-green-400 mt-2">Server Online</p>
+        <h1 class="text-2xl font-bold">Server Status</h1>
+        <p id="status" class="mt-2 text-green-400">Checking status...</p>
+        <p id="client-count" class="mt-2 text-blue-400">Clients Connected: 0</p>
     </div>
+
+    <script>
+        const statusElement = document.getElementById("status");
+        const clientCountElement = document.getElementById("client-count");
+        const socket = io();
+
+        socket.on("connect", () => {
+            statusElement.textContent = "Server Online";
+            statusElement.classList.remove("text-red-400");
+            statusElement.classList.add("text-green-400");
+        });
+
+        socket.on("disconnect", () => {
+            statusElement.textContent = "Server Offline";
+            statusElement.classList.remove("text-green-400");
+            statusElement.classList.add("text-red-400");
+        });
+
+        socket.on("client-count", (count) => {
+            clientCountElement.textContent = `Clients Connected: ${count}`;
+        });
+    </script>
 </body>
 </html>

@@ -15,10 +15,12 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
+    "mikronode": "^2.3.11",
     "moment": "^2.30.1",
     "nodemon": "^3.1.9",
     "prisma": "^6.4.1",
-    "routeros-client": "^1.1.2"
+    "routeros-client": "^1.1.2",
+    "socket.io": "^4.8.1"
   },
   "description": ""
 }

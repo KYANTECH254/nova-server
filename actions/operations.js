@@ -1,6 +1,24 @@
+const { get } = require("../mikrotik/routes/mikrotikRoutes");
 const prisma = require("../prisma");
 const now = new Date();
 const offsetDate = new Date(now.toLocaleString("en-US", { timeZone: "Africa/Nairobi" }));
+
+async function validateOperation(adminID, platformID) {
+  try {
+    const platform = await prisma.platform.findUnique({
+      where: { platformID }
+    });
+
+    if (!platform || platform.adminID !== adminID) {
+      return false; 
+    }
+
+    return true; 
+  } catch (error) {
+    console.error("Error validating operation:", error);
+    throw error;
+  }
+}
 
 async function getPlatformConfig(platformID) {
   try {
@@ -126,6 +144,9 @@ async function createUser(data) {
     const user = await prisma.user.create({
       data: {
         ...data,
+        package: data.packageID
+          ? { connect: { id: data.packageID } }
+          : { create: data.package },
         createdAt: offsetDate,
         updatedAt: offsetDate
       }
@@ -165,6 +186,30 @@ async function deleteUser(id) {
   }
 }
 
+async function getUserByPhone(phone) {  
+  try {
+    const users = await prisma.user.findMany({
+      where: { phone }
+    });
+    return users;
+  } catch (error) {
+    console.error('Error fetching user by phone:', error);
+    throw error;
+  }
+}
+
+async function getUserByToken(token) {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { token }
+    });
+    return user;
+  } catch (error) {
+    console.error('Error fetching user by token:', error);
+    throw error;
+  }
+}
+
 async function addMpesaCode(data) {
   try {
     const mpesaCode = await prisma.mpesa.create({
@@ -186,7 +231,7 @@ async function updateMpesaCode(code, data) {
   try {
     const mpesaCode = await prisma.mpesa.update({
       where: { code },
-      data : {
+      data: {
         ...data,
         updatedAt: offsetDate
       }
@@ -213,10 +258,10 @@ async function deleteMpesaCode(code) {
 async function createAdmin(data) {
   try {
     const admin = await prisma.admin.create({
-      data:{
+      data: {
         ...data,
         createdAt: offsetDate,
-      updatedAt: offsetDate
+        updatedAt: offsetDate
       }
     });
     return admin;
@@ -230,12 +275,12 @@ async function updateAdmin(id, data) {
   try {
     const admin = await prisma.admin.update({
       where: { id },
-      data:{
+      data: {
         ...data,
         createdAt: offsetDate,
-      updatedAt: offsetDate
+        updatedAt: offsetDate
       }
-      
+
     });
     return admin;
   } catch (error) {
@@ -262,9 +307,9 @@ async function createPackage(data) {
       data: {
         ...data,
         createdAt: offsetDate,
-      updatedAt: offsetDate
+        updatedAt: offsetDate
       }
-      
+
     });
     return package;
   } catch (error) {
@@ -277,7 +322,7 @@ async function updatePackage(id, data) {
   try {
     const package = await prisma.package.update({
       where: { id },
-      data :{
+      data: {
         ...data,
         updatedAt: offsetDate
       }
@@ -292,7 +337,7 @@ async function updatePackage(id, data) {
 async function getPackage(id) {
   try {
     const package = await prisma.package.findUnique({
-      where: { id }
+      where: { packageID:id }
     });
     return package;
   } catch (error) {
@@ -406,6 +451,9 @@ module.exports = {
   deletePackage,
   createPlatform,
   updatePlatform,
-  deletePlatform,
-  getPlatform
+  deletePlatform, 
+  getPlatform,
+  getUserByToken,
+  getUserByPhone,
+  validateOperation
 };
