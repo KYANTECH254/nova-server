@@ -4,6 +4,7 @@ const http = require("http");
 const path = require("path");
 const mikrotikRoutes = require("./mikrotik/routes/mikrotikRoutes");
 const mpesaRoutes = require("./mpesa/routes/mpesaRoutes");
+const reqRoutes = require("./routes/routes");
 const { SocketInstance } = require("./socket/controllers/socketController");
 
 const app = express();
@@ -16,6 +17,7 @@ app.use(express.static(path.join(__dirname, "public")));
 // Routes
 app.use("/mkt", mikrotikRoutes);
 app.use("/mpesa", mpesaRoutes);
+app.use("/req", reqRoutes);
 
 // Serve the homepage
 app.get("/", (req, res) => {
@@ -27,7 +29,7 @@ app.use((req, res) => {
   res.status(404).sendFile(path.join(__dirname, "public", "404.html"));
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3013;
 
 server.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
