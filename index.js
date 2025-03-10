@@ -1,14 +1,16 @@
 require("dotenv").config();
 const express = require("express");
 const path = require("path");
-// const mikrotikRoutes = require("./mikrotik/routes/mikrotikRoutes");
+const mikrotikRoutes = require("./mikrotik/routes/mikrotikRoutes");
+const mpesaRoutes = require("./mpesa/routes/mpesaRoutes");
 
 const app = express();
 app.use(express.json());
 
 app.use(express.static(path.join(__dirname, "public")));
 
-// app.use("/api/mkt", mikrotikRoutes);
+app.use("/api/mkt", mikrotikRoutes);
+app.use("/mpesa", mpesaRoutes);
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));

@@ -1,5 +1,5 @@
 const express = require("express");
-const { manageUser } = require("../controllers/mikrotikController");
+const { manageUser } = require("../contollers/mikrotikController");
 
 const router = express.Router();
 

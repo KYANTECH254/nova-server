@@ -1,24 +1,5 @@
-const { PrismaClient } = require('@prisma/client');
 const { RouterOSClient } = require('routeros-client');
-
-const prisma = new PrismaClient();
-
-async function getPlatformConfig(platformID) {
-  try {
-    const config = await prisma.platformSetting.findUnique({
-      where: { platformID }
-    });
-
-    if (!config) {
-      throw new Error(`No configuration found for platformID: ${platformID}`);
-    }
-
-    return config;
-  } catch (error) {
-    console.error('Error fetching platform configuration:', error);
-    throw error;
-  }
-}
+const { getPlatformConfig } = require("../../actions/operations")
 
 async function createMikrotikClient(platformID) {
   const config = await getPlatformConfig(platformID);
@@ -34,4 +15,4 @@ async function createMikrotikClient(platformID) {
   });
 }
 
-module.exports = { createMikrotikClient, getPlatformConfig };
+module.exports = { createMikrotikClient };
