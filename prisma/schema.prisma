@@ -8,18 +8,18 @@ datasource db {
 }
 
 model User {
-  id          String   @id @default(uuid())
-  phone       String
-  username    String?
-  password    String?
-  status      String   @default("inactive")
-  code        String   @default("null")
-  token       String?  @unique
-  platformID  String
-  packageID   String? 
-  package     Package? @relation(fields: [packageID], references: [id])
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(uuid())
+  phone      String
+  username   String?
+  password   String?
+  status     String   @default("inactive")
+  code       String   @default("null")
+  token      String?  @unique
+  platformID String
+  packageID  String?
+  package    Package? @relation(fields: [packageID], references: [id])
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 }
 
 model Mpesa {
@@ -52,7 +52,7 @@ model Package {
   devices    String
   adminID    String
   platformID String
-  users      User[] 
+  users      User[]
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
@@ -80,12 +80,12 @@ model Platform {
 model PlatformSetting {
   id                  String   @unique @default(uuid())
   platformID          String   @unique
+  platformIP          String?
   adminID             String
-  mpesaTill           String?  @default("null")
-  mpesaPaybill        String?  @default("null")
   mpesaConsumerKey    String?
   mpesaConsumerSecret String?
   mpesaShortCode      String?
+  mpesaShortCodeType  String?
   mpesaPassKey        String?
   mikrotikHost        String?
   mikrotikUser        String?

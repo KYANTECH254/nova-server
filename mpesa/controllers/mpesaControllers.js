@@ -1,19 +1,18 @@
 const axios = require('axios');
 const moment = require('moment');
 const { MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, MPESA_SHORTCODE, MPESA_PASSKEY, MPESA_CALLBACK_URL, MPESA_STK_URL, MPESA_AUTH_URL } = require('../config/mpesaConfig');
-const { addMpesaCode, updateMpesaCode, createUser, getPackage, updateUser } = require("../../actions/operations");
+const { addMpesaCode, updateMpesaCode, createUser, getPackage, updateUser, getPlatformConfig } = require("../../actions/operations");
 const { emitEvent } = require("../../socket/controllers/socketController");
 const { manageMikrotikUser } = require("../../mikrotik/contollers/mikrotikController");
 
-const getAccessToken = async () => {
+const getAccessToken = async (platform) => {
     try {
-        console.log("Mpesa Shortcode:", MPESA_SHORTCODE, "Mpesa Consumer Key:", MPESA_CONSUMER_KEY, "Mpesa Consumer Secret:", MPESA_CONSUMER_SECRET, "Mpesa Passkey", MPESA_PASSKEY, "Callback URL:", MPESA_CALLBACK_URL);
-        const response = await axios.get(
+ const response = await axios.get(
             MPESA_AUTH_URL,
             {
                 auth: {
-                    username: MPESA_CONSUMER_KEY,
-                    password: MPESA_CONSUMER_SECRET,
+                    username: platform.mpesaConsumerKey,
+                    password: platform.mpesaConsumerSecret,
                 },
             }
         );
@@ -36,27 +35,29 @@ const stkPush = async (req, res) => {
     if (!phone || !amount) {
         return res.status(400).json({ type: "error", message: "Phone number and amount are required." });
     }
+    const platform = getPlatformConfig(package);
+    if (!platform) {
+        return res.status(400).json({ type: "error", message: "Invalid package." });
+    }
     try {
-        const accessToken = await getAccessToken();
+        const accessToken = await getAccessToken(platform);
         const timestamp = moment().format('YYYYMMDDHHmmss');
-        const password = Buffer.from(`${MPESA_SHORTCODE}${MPESA_PASSKEY}${timestamp}`).toString('base64');
-        console.log(formatPhoneNumber(phone));
-        
+        const password = Buffer.from(`${platform.mpesaShortCode}${platform.mpesaPassKey}${timestamp}`).toString('base64');
+
         const response = await axios.post(
             MPESA_STK_URL,
             {
-                BusinessShortCode: MPESA_SHORTCODE,
+                BusinessShortCode: platform.mpesaShortCode,
                 Password: password,
                 Timestamp: timestamp,
-                // TransactionType: 'CustomerPayBillOnline',
-                TransactionType: 'CustomerBuyGoodsOnline',
+                TransactionType: platform.mpesaShortCodeType === "paybill" ? 'CustomerPayBillOnline' : 'CustomerBuyGoodsOnline',
                 Amount: amount,
                 PartyA: formatPhoneNumber(phone),
-                PartyB: MPESA_SHORTCODE,
-                PhoneNumber: phone,
+                PartyB: platform.mpesaShortCode,
+                PhoneNumber: formatPhoneNumber(phone),
                 CallBackURL: MPESA_CALLBACK_URL,
-                AccountReference: 'TestPayment',
-                TransactionDesc: 'Payment for test service',
+                AccountReference: platform.mpesaShortCodeType === "paybill" ? 'PayBill' : 'BuyGoods',
+                TransactionDesc: 'WiFi Subscription Payment',
             },
             {
                 headers: {
@@ -86,7 +87,7 @@ const stkPush = async (req, res) => {
             }
         }
     } catch (error) {
-        console.error('Error initiating STK Push:', error.response || error.message);
+        console.error('Error initiating STK Push:', error.response?.data || error.message);
         return res.status(500).json({ type: "error", message: "Failed to initiate STK Push", error: error.message });
     }
 };
@@ -164,7 +165,5 @@ const callBack = async (req, res) => {
 
     res.status(200).send("Callback received");
 };
-
-
 
 module.exports = { stkPush, callBack };
