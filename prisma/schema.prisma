@@ -71,6 +71,7 @@ model SuperUser {
 model Platform {
   id         String   @unique @default(uuid())
   name       String
+  url        String   @unique
   platformID String   @unique
   adminID    String
   createdAt  DateTime @default(now())

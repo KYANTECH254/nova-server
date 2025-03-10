@@ -1,14 +1,14 @@
 const axios = require('axios');
 const moment = require('moment');
-const { MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, MPESA_SHORTCODE, MPESA_PASSKEY, MPESA_CALLBACK_URL, MPESA_STK_URL, MPESA_AUTH_URL } = require('../config/mpesaConfig');
+const { MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET, MPESA_SHORTCODE, MPESA_PASSKEY, MPESA_CALLBACK_URL, MPESA_STK_URL, MPESA_AUTH_URL, MPESA_AUTH_LIVE_URL, MPESA_STK_LIVE_URL } = require('../config/mpesaConfig');
 const { addMpesaCode, updateMpesaCode, createUser, getPackage, updateUser, getPlatformConfig } = require("../../actions/operations");
 const { emitEvent } = require("../../socket/controllers/socketController");
 const { manageMikrotikUser } = require("../../mikrotik/contollers/mikrotikController");
 
 const getAccessToken = async (platform) => {
     try {
- const response = await axios.get(
-            MPESA_AUTH_URL,
+        const response = await axios.get(
+            MPESA_AUTH_LIVE_URL,
             {
                 auth: {
                     username: platform.mpesaConsumerKey,
@@ -45,7 +45,7 @@ const stkPush = async (req, res) => {
         const password = Buffer.from(`${platform.mpesaShortCode}${platform.mpesaPassKey}${timestamp}`).toString('base64');
 
         const response = await axios.post(
-            MPESA_STK_URL,
+            MPESA_STK_LIVE_URL,
             {
                 BusinessShortCode: platform.mpesaShortCode,
                 Password: password,
@@ -74,7 +74,7 @@ const stkPush = async (req, res) => {
                 status: "PENDING"
             }
             const userData = {
-                token:response.data.CheckoutRequestID,
+                token: response.data.CheckoutRequestID,
                 phone: phone,
                 package: package,
                 status: "inactive",
@@ -133,7 +133,7 @@ const callBack = async (req, res) => {
             const mikrotikUser = await manageMikrotikUser({
                 platformID: user.platformID,
                 action: "add",
-                package:package
+                package: package
             });
 
             // Send User Data to Client via WebSocket

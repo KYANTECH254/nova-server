@@ -37,6 +37,23 @@ async function getPlatformConfig(platformID) {
   }
 }
 
+async function getPlatformByIP(ip) {
+  try {
+    const platform = await prisma.platformSetting.findFirst({
+      where: { platformIP: ip }
+    }); 
+
+    if (!platform) {
+      return null;
+    }
+
+    return platform;
+  } catch (error) {
+    console.error('Error fetching platform by IP:', error);
+    throw error;
+  }
+}
+
 async function updatePlatformConfig(platformID, data) {
   try {
     const config = await prisma.platformSetting.update({
@@ -370,19 +387,30 @@ async function deletePackage(id) {
   }
 }
 
+function generateSlug(name) {
+  return name
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, "") 
+      .replace(/\s+/g, "-"); 
+}
+
 async function createPlatform(data) {
   try {
-    const platform = await prisma.platform.create({
-      data: {
-        ...data,
-        createdAt: offsetDate,
-        updatedAt: offsetDate
-      }
-    });
-    return platform;
+      const slug = generateSlug(data.name); 
+      const platform = await prisma.platform.create({
+          data: {
+              ...data,
+              url: slug,
+              createdAt: offsetDate,
+              updatedAt: offsetDate
+          }
+      });
+
+      return platform;
   } catch (error) {
-    console.error("Error creating platform:", error);
-    throw error;
+      console.error("Error creating platform:", error);
+      throw error;
   }
 }
 
@@ -426,6 +454,18 @@ async function getPlatform(platformID) {
   }
 }
 
+async function getPlatformByUrl(url) {
+  try {
+    const platform = await prisma.platform.findUnique({
+      where: { url }
+    });
+    return platform;
+  } catch (error) {
+    console.error('Error getting platform:', error);
+    throw error;
+  }
+}
+
 module.exports = {
   getPlatformConfig,
   updatePlatformConfig,
@@ -455,5 +495,7 @@ module.exports = {
   getPlatform,
   getUserByToken,
   getUserByPhone,
-  validateOperation
+  validateOperation,
+  getPlatformByIP,
+  getPlatformByUrl
 };
