@@ -37,12 +37,11 @@ const getCode = async (req, res) => {
         if (!foundcodes || foundcodes.length === 0) {
             return res.status(404).json({ type: "error", message: "No codes found." });
         }
+
         const updatedCodes = await Promise.all(
             foundcodes.map(async (codeData) => {
-                const { username, platformID } = codeData;
-
+                const { username, platformID, status } = codeData;
                 if (!username || !platformID) return codeData;
-
                 const mikrotikData = await getMikrotikActiveUserDetails(username, platformID);
 
                 if (mikrotikData.type === "success") {
@@ -51,11 +50,15 @@ const getCode = async (req, res) => {
                         activeFrom: mikrotikData.activeFrom,
                         timeLeft: mikrotikData.timeLeft
                     };
+                } else {
+                    if (status !== "expired") {
+                        await updateUser(username, { status: "expired" });
+                    }
                 }
-                return codeData;
+
+                return { ...codeData, status: "expired" };
             })
         );
-
         return res.status(200).json({ type: "success", foundcodes: updatedCodes });
 
     } catch (error) {

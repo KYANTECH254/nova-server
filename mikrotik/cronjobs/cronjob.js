@@ -21,8 +21,9 @@ const checkAndUpdateAllUserSessions = async () => {
             try {
                 // Connect to MikroTik router for this platform
                 client = await createMikrotikClient(platform.platformID);
+                if (client === null) return
                 await client.connect();
-                const users = await getActivePlatformUsers(platformID);
+                const users = await getActivePlatformUsers(platform.platformID);
 
                 if (users.length === 0) {
                     console.log(`No active users found on platform ${platform.platformID}.`);
@@ -30,7 +31,7 @@ const checkAndUpdateAllUserSessions = async () => {
                 }
                 // Get active sessions from MikroTik
                 const sessions = await client.write("/ip/hotspot/active/print", []);
-                for (const user of users) {
+                for (const usessr of users) {
                     const isUserOnline = sessions.some(session => session.name === user.username);
 
                     if (!isUserOnline) {
