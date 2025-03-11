@@ -5,7 +5,7 @@ async function createMikrotikClient(platformID) {
   const config = await getPlatformConfig(platformID);
 
   if (!config.mikrotikHost || !config.mikrotikUser || !config.mikrotikPassword) {
-    throw new Error("Mikrotik configuration is incomplete");
+    return null;
   }
 
   const connection = new MikroNode.Connection(config.mikrotikHost, 8729, {

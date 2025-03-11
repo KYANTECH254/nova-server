@@ -128,7 +128,10 @@ const callBack = async (req, res) => {
                 status: "SUCCESS"
             };
             await updateMpesaCode(transactionDetails.checkoutRequestId, mpesaCode);
-            await updateUser(user.id, "active");
+            const upddata = {
+                status:"active",
+            }
+            await updateUser(user.id, upddata);
 
             const mikrotikUser = await manageMikrotikUser({
                 platformID: user.platformID,
@@ -166,4 +169,4 @@ const callBack = async (req, res) => {
     res.status(200).send("Callback received");
 };
 
-module.exports = { stkPush, callBack };
+module.exports = { stkPush, callBack, formatPhoneNumber };

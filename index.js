@@ -7,6 +7,7 @@ const mikrotikRoutes = require("./mikrotik/routes/mikrotikRoutes");
 const mpesaRoutes = require("./mpesa/routes/mpesaRoutes");
 const reqRoutes = require("./routes/routes");
 const { SocketInstance } = require("./socket/controllers/socketController");
+const checkAndUpdateAllUserSessions = require("./mikrotik/cronjobs/cronjob");
 
 const app = express();
 const server = http.createServer(app); 

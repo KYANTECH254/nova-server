@@ -1,19 +1,19 @@
-const { get } = require("../mikrotik/routes/mikrotikRoutes");
 const prisma = require("../prisma");
 const now = new Date();
 const offsetDate = new Date(now.toLocaleString("en-US", { timeZone: "Africa/Nairobi" }));
 
 async function validateOperation(adminID, platformID) {
+  if (platformID || !adminID) return null
   try {
     const platform = await prisma.platform.findUnique({
       where: { platformID }
     });
 
     if (!platform || platform.adminID !== adminID) {
-      return false; 
+      return false;
     }
 
-    return true; 
+    return true;
   } catch (error) {
     console.error("Error validating operation:", error);
     throw error;
@@ -21,6 +21,7 @@ async function validateOperation(adminID, platformID) {
 }
 
 async function getPlatformConfig(platformID) {
+  if (!platformID) return null
   try {
     const config = await prisma.platformSetting.findUnique({
       where: { platformID }
@@ -38,10 +39,11 @@ async function getPlatformConfig(platformID) {
 }
 
 async function getPlatformByIP(ip) {
+  if (!ip) return null
   try {
     const platform = await prisma.platformSetting.findFirst({
       where: { platformIP: ip }
-    }); 
+    });
 
     if (!platform) {
       return null;
@@ -55,6 +57,7 @@ async function getPlatformByIP(ip) {
 }
 
 async function updatePlatformConfig(platformID, data) {
+  if (!platformID || !data) return;
   try {
     const config = await prisma.platformSetting.update({
       where: { platformID },
@@ -72,6 +75,7 @@ async function updatePlatformConfig(platformID, data) {
 }
 
 async function deletePlatformConfig(platformID) {
+  if (!platformID) return null
   try {
     await prisma.platformSetting.delete({
       where: { platformID }
@@ -83,6 +87,7 @@ async function deletePlatformConfig(platformID) {
 }
 
 async function createPlatformConfig(platformID, data) {
+  if (!platformID || !data) return null
   try {
     const config = await prisma.platformSetting.create({
       data: {
@@ -100,11 +105,9 @@ async function createPlatformConfig(platformID, data) {
   }
 }
 
-async function getSuperUser(data) {
+async function getSuperUser() {
   try {
-    const superUser = await prisma.superUser.findUnique({
-      where: { email: data.email }
-    });
+    const superUser = await prisma.superUser.findFirst();
     return superUser;
   } catch (error) {
     console.error('Error fetching super user:', error);
@@ -113,6 +116,7 @@ async function getSuperUser(data) {
 }
 
 async function createSuperUser(data) {
+  if (!data) return null
   try {
     const superUser = await prisma.superUser.create({
       data: {
@@ -129,6 +133,7 @@ async function createSuperUser(data) {
 }
 
 async function updateSuperUser(data) {
+  if (!data) return null
   try {
     const superUser = await prisma.superUser.update({
       where: { id: data.id },
@@ -145,6 +150,7 @@ async function updateSuperUser(data) {
 }
 
 async function deleteSuperUser(id) {
+  if (!id) return null
   try {
     const superUser = await prisma.superUser.delete({
       where: { id }
@@ -157,6 +163,7 @@ async function deleteSuperUser(id) {
 }
 
 async function createUser(data) {
+  if (!data) return null
   try {
     const user = await prisma.user.create({
       data: {
@@ -176,6 +183,7 @@ async function createUser(data) {
 }
 
 async function updateUser(id, data) {
+  if (!id || !data) return null
   try {
     const user = await prisma.user.update({
       where: { id },
@@ -192,6 +200,7 @@ async function updateUser(id, data) {
 }
 
 async function deleteUser(id) {
+  if (!id) return null
   try {
     const user = await prisma.user.delete({
       where: { id }
@@ -203,7 +212,8 @@ async function deleteUser(id) {
   }
 }
 
-async function getUserByPhone(phone) {  
+async function getUserByPhone(phone) {
+  if (!phone) return null
   try {
     const users = await prisma.user.findMany({
       where: { phone }
@@ -216,6 +226,7 @@ async function getUserByPhone(phone) {
 }
 
 async function getUserByToken(token) {
+  if (!token) return null
   try {
     const user = await prisma.user.findUnique({
       where: { token }
@@ -228,6 +239,7 @@ async function getUserByToken(token) {
 }
 
 async function addMpesaCode(data) {
+  if (!data) return null
   try {
     const mpesaCode = await prisma.mpesa.create({
       data: {
@@ -245,6 +257,7 @@ async function addMpesaCode(data) {
 }
 
 async function updateMpesaCode(code, data) {
+  if (!code || !data) return null
   try {
     const mpesaCode = await prisma.mpesa.update({
       where: { code },
@@ -261,6 +274,7 @@ async function updateMpesaCode(code, data) {
 }
 
 async function deleteMpesaCode(code) {
+  if (!code) return null
   try {
     const mpesaCode = await prisma.mpesa.delete({
       where: { code }
@@ -273,6 +287,7 @@ async function deleteMpesaCode(code) {
 }
 
 async function createAdmin(data) {
+  if (!data) return null
   try {
     const admin = await prisma.admin.create({
       data: {
@@ -289,6 +304,7 @@ async function createAdmin(data) {
 }
 
 async function updateAdmin(id, data) {
+  if (!id || !data) return null
   try {
     const admin = await prisma.admin.update({
       where: { id },
@@ -307,6 +323,7 @@ async function updateAdmin(id, data) {
 }
 
 async function deleteAdmin(id) {
+  if (!id) return null
   try {
     const admin = await prisma.admin.delete({
       where: { id }
@@ -319,6 +336,7 @@ async function deleteAdmin(id) {
 }
 
 async function createPackage(data) {
+  if (!data) return null
   try {
     const package = await prisma.package.create({
       data: {
@@ -336,6 +354,7 @@ async function createPackage(data) {
 }
 
 async function updatePackage(id, data) {
+  if (!id || !data) return null
   try {
     const package = await prisma.package.update({
       where: { id },
@@ -352,9 +371,10 @@ async function updatePackage(id, data) {
 }
 
 async function getPackage(id) {
+  if (!id) return null
   try {
     const package = await prisma.package.findUnique({
-      where: { packageID:id }
+      where: { packageID: id }
     });
     return package;
   } catch (error) {
@@ -364,6 +384,7 @@ async function getPackage(id) {
 }
 
 async function getPackages(platformID) {
+  if (!platformID) return null
   try {
     const packages = await prisma.package.findMany({
       where: { platformID }
@@ -376,6 +397,7 @@ async function getPackages(platformID) {
 }
 
 async function deletePackage(id) {
+  if (!id) return null
   try {
     const package = await prisma.package.delete({
       where: { id }
@@ -388,33 +410,36 @@ async function deletePackage(id) {
 }
 
 function generateSlug(name) {
+  if (!name) return null
   return name
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9\s-]/g, "") 
-      .replace(/\s+/g, "-"); 
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-");
 }
 
 async function createPlatform(data) {
+  if (!data) return null
   try {
-      const slug = generateSlug(data.name); 
-      const platform = await prisma.platform.create({
-          data: {
-              ...data,
-              url: slug,
-              createdAt: offsetDate,
-              updatedAt: offsetDate
-          }
-      });
+    const slug = generateSlug(data.name);
+    const platform = await prisma.platform.create({
+      data: {
+        ...data,
+        url: slug,
+        createdAt: offsetDate,
+        updatedAt: offsetDate
+      }
+    });
 
-      return platform;
+    return platform;
   } catch (error) {
-      console.error("Error creating platform:", error);
-      throw error;
+    console.error("Error creating platform:", error);
+    throw error;
   }
 }
 
 async function updatePlatform(id, data) {
+  if (!data || !id) return null
   try {
     const platform = await prisma.platform.update({
       where: { id },
@@ -431,6 +456,7 @@ async function updatePlatform(id, data) {
 }
 
 async function deletePlatform(id) {
+  if (!id) return null
   try {
     const platform = await prisma.platform.delete({
       where: { id }
@@ -443,6 +469,7 @@ async function deletePlatform(id) {
 }
 
 async function getPlatform(platformID) {
+  if (!platformID) return null
   try {
     const platform = await prisma.platform.findUnique({
       where: { platformID }
@@ -451,6 +478,10 @@ async function getPlatform(platformID) {
     const admin = await getAdmin(platform.adminID);
     if (!admin) {
       return null;
+    }
+    const superuser = await getSuperUser();
+    if (superuser) {
+      platform.admin_phone = superuser.phone;
     }
 
     platform.phone = admin.phone;
@@ -461,7 +492,8 @@ async function getPlatform(platformID) {
   }
 }
 
-async function getAdmin(adminID) { 
+async function getAdmin(adminID) {
+  if (!adminID) return null
   try {
     const admin = await prisma.admin.findUnique({
       where: { adminID }
@@ -474,6 +506,7 @@ async function getAdmin(adminID) {
 }
 
 async function getPlatformByUrl(url) {
+  if (!url) return null
   try {
     const platform = await prisma.platform.findUnique({
       where: { url }
@@ -487,10 +520,70 @@ async function getPlatformByUrl(url) {
       return null;
     }
 
+    const superuser = await getSuperUser();
+    if (superuser) {
+      platform.admin_phone = superuser.phone;
+    }
+
     platform.phone = admin.phone;
     return platform;
   } catch (error) {
     console.error('Error getting platform:', error);
+    throw error;
+  }
+}
+
+async function getCodesByPhone(phone) {
+  if (!phone) return null;
+  try {
+    const codes = await prisma.user.findMany({
+      where: { phone, status: "active" }
+    })
+
+    return codes;
+  } catch (error) {
+    console.error('Error getting platform:', error);
+    throw error;
+  }
+}
+
+async function getCodesByMpesa(code) {
+  if (!code) return null;
+  try {
+    const codes = await prisma.user.findMany({
+      where: { code, status: "active" }
+    })
+
+    return codes;
+  } catch (error) {
+    console.error('Error getting platform:', error);
+    throw error;
+  }
+}
+
+async function getPlatforms() {
+  try {
+    const platforms = await prisma.platform.findMany({
+      select: { platformID: true }
+    });
+    return platforms;
+  } catch (error) {
+    console.error('Error getting platform:', error);
+    throw error;
+  }
+}
+
+async function getActivePlatformUsers(platformID) {
+  if (!platformID) return null;
+  try {
+    const users = await prisma.user.findMany({
+      where: { status: "active", platformID: platform.platformID },
+      select: { id: true, username: true }
+    });
+
+    return users;
+  } catch (error) {
+    console.error('Error getting users:', error);
     throw error;
   }
 }
@@ -520,11 +613,15 @@ module.exports = {
   deletePackage,
   createPlatform,
   updatePlatform,
-  deletePlatform, 
+  deletePlatform,
   getPlatform,
   getUserByToken,
   getUserByPhone,
   validateOperation,
   getPlatformByIP,
-  getPlatformByUrl
+  getPlatformByUrl,
+  getCodesByMpesa,
+  getCodesByPhone,
+  getPlatforms,
+  getActivePlatformUsers
 };
