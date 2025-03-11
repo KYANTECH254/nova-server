@@ -447,9 +447,28 @@ async function getPlatform(platformID) {
     const platform = await prisma.platform.findUnique({
       where: { platformID }
     });
+    if (!platform) return null;
+    const admin = await getAdmin(platform.adminID);
+    if (!admin) {
+      return null;
+    }
+
+    platform.phone = admin.phone;
     return platform;
   } catch (error) {
     console.error('Error getting platform:', error);
+    throw error;
+  }
+}
+
+async function getAdmin(adminID) { 
+  try {
+    const admin = await prisma.admin.findUnique({
+      where: { adminID }
+    });
+    return admin;
+  } catch (error) {
+    console.error('Error getting admin:', error);
     throw error;
   }
 }
@@ -459,6 +478,16 @@ async function getPlatformByUrl(url) {
     const platform = await prisma.platform.findUnique({
       where: { url }
     });
+    if (!platform) {
+      return null;
+    }
+
+    const admin = await getAdmin(platform.adminID);
+    if (!admin) {
+      return null;
+    }
+
+    platform.phone = admin.phone;
     return platform;
   } catch (error) {
     console.error('Error getting platform:', error);

@@ -43,6 +43,12 @@ model Admin {
   updatedAt DateTime @updatedAt
 }
 
+enum Category {
+  Daily
+  Weekly
+  Monthly
+}
+
 model Package {
   id         String   @id @default(uuid())
   name       String
@@ -50,6 +56,8 @@ model Package {
   price      String
   speed      String
   devices    String
+  usage      String
+  category   Category
   adminID    String
   platformID String
   users      User[]
