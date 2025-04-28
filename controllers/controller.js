@@ -504,7 +504,7 @@ const fetchPayments = async (req, res) => {
   if (!token) {
     return res.json({
       success: false,
-      message: "Missing credentials required 2!",
+      message: "Missing credentials required!",
     });
   }
   const auth = await AuthenticateRequest(token);
@@ -540,7 +540,7 @@ const fetchModerators = async (req, res) => {
   if (!token) {
     return res.json({
       success: false,
-      message: "Missing credentials required 2!",
+      message: "Missing credentials required!",
     });
   }
   const auth = await AuthenticateRequest(token);
@@ -676,7 +676,7 @@ const fetchCodes = async (req, res) => {
   if (!token) {
     return res.json({
       success: false,
-      message: "Missing credentials required 2!",
+      message: "Missing credentials required!",
     });
   }
   const auth = await AuthenticateRequest(token);
@@ -1047,7 +1047,7 @@ async function updateSettings(req, res) {
   if (!token) {
     return res.json({
       success: false,
-      message: "Missing credentials required 2!",
+      message: "Missing credentials required!",
     });
   }
   const auth = await AuthenticateRequest(token);
@@ -1209,7 +1209,7 @@ const updateName = async (req, res) => {
   if (!token) {
     return res.json({
       success: false,
-      message: "Missing credentials required 2!",
+      message: "Missing credentials required!",
     });
   }
   const auth = await AuthenticateRequest(token);
@@ -1371,7 +1371,7 @@ const fetchStations = async (req, res) => {
   if (!token) {
     return res.json({
       success: false,
-      message: "Missing credentials required 2!",
+      message: "Missing credentials required!",
     });
   }
   const auth = await AuthenticateRequest(token);

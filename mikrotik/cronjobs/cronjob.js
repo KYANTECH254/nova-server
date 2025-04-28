@@ -34,46 +34,30 @@ const checkAndExpireUsers = async () => {
 
             for (const user of users) {
                 const username = user.username;
+                console.log(user);
 
                 if (!username) {
                     console.warn(`User without username found in platform '${platformID}'`);
                     continue;
                 }
 
+                const updateuser = await updateUser(user.id, { status: "expired" })
+
                 try {
-                    if (!user.expireAt) {
-                        console.log(`User '${username}' has no expireAt set, skipping.`);
-                        continue;
+                    // Fetch the MikroTik user by username to get their ID
+                    const mikrotikUser = await channel.menu('/ip/hotspot/user/print')
+                        .where('name', username)
+                        .get();
+
+                    if (mikrotikUser.length > 0) {
+                        const userId = mikrotikUser[0]['.id'] || mikrotikUser[0].id;
+                        await channel.menu('/ip/hotspot/user/remove').remove({
+                            id: userId
+                        });
+                        console.log(`User ${userId} '${username}' removed from MikroTik (platform: ${platformID})`);
+                    } else {
+                        console.log(`User '${username}' not found on MikroTik, no need to remove.`);
                     }
-
-                    const now = new Date();
-                    const expireAt = new Date(user.expireAt);
-
-                    if (now >= expireAt && user.status !== 'expired') {
-                        // Remove user from MikroTik
-                        const mikrotikUser = await channel.menu('/ip/hotspot/user/print')
-                            .where('name', username)
-                            .get();
-console.log(mikrotikUser);
-
-                        if (mikrotikUser.length > 0) {
-                            const userId = mikrotikUser[0].id;
-console.log(userId);
-
-                            await channel.menu('/ip/hotspot/user/remove')
-                                .where('id', userId)
-                                .exec();
-
-                            console.log(`User '${username}' removed from MikroTik (platform: ${platformID})`);
-                        } else {
-                            console.log(`User '${username}' not found on MikroTik, no need to remove.`);
-                        }
-
-                        // Update user status in DB
-                        await updateUser(user.id, { status: 'expired' });
-                        console.log(`User '${username}' marked as expired in database (platform: ${platformID})`);
-                    }
-
                 } catch (err) {
                     console.error(`Failed to process user '${username}' for platform '${platformID}':`, err);
                 }
@@ -85,9 +69,9 @@ console.log(userId);
 };
 
 // Schedule the function to run every 1 minutes
-// cron.schedule("*/1 * * * *", () => {
-//     console.log("Running scheduled MikroTik user expire check...");
-//     checkAndExpireUsers();
-// });
-checkAndExpireUsers();
+cron.schedule("*/1 * * * *", () => {
+    console.log("Running scheduled MikroTik user expire check...");
+    checkAndExpireUsers();
+});
+
 module.exports = checkAndExpireUsers;
