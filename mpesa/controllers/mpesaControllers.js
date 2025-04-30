@@ -19,11 +19,13 @@ const {
     updateFunds,
     getMpesaCode,
     createFunds,
-    getPackagesByAmount
+    getPackagesByAmount,
+    getSuperAdminsByPlatform
 } = require("../../actions/operations");
 const { emitEvent } = require("../../socket/controllers/socketController");
 const { manageMikrotikUser, AuthenticateRequest } = require("../../mikrotik/contollers/mikrotikController");
 const { addManualCode } = require("../../controllers/mikrotikController");
+const { EmailTemplate } = require('../../mailer/mailerTemplates');
 
 const getAccessToken = async (platform) => {
     try {
@@ -432,6 +434,25 @@ const handleIntasendCallback = async (req, res) => {
             platformID: mpesaCode.platformID,
             type: 'withdrawal',
         });
+
+        const admins = await getSuperAdminsByPlatform(mpesaCode.platformID);
+        if (admins && admins.length > 0) {
+            for (const admin of admins) {
+                const name = admin.name;
+                const email = admin.email;
+                const type = "info"
+                const subject = `Successful withdrawal request!`
+                const message = `You withdrawal of ${amount}KES has been send to your M-PESA account.`;
+                const data = {
+                    name: name,
+                    type: "info",
+                    email: email,
+                    subject: subject,
+                    message: message
+                }
+                const sendwithdrawalemail = await EmailTemplate(data);
+            }
+        }
 
         return res.status(200).json({
             success: true,

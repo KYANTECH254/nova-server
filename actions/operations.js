@@ -807,6 +807,22 @@ async function getAdminsByID(adminID) {
   }
 }
 
+async function getSuperAdminsByPlatform(platformID) {
+  if (!platformID) return null;
+  try {
+    const superadmin = await prisma.admin.findMany({
+      where: {
+        platformID: platformID,
+        role: "superuser"
+      },
+    });
+    return superadmin;
+  } catch (error) {
+    console.log("An error occured", error);
+    return false;
+  }
+}
+
 async function getAdmins() {
   try {
     const admins = await prisma.admin.findMany();
@@ -1140,5 +1156,6 @@ module.exports = {
   updateFunds,
   deleteFunds,
   getMpesaCode,
-  getPackagesByAmount
+  getPackagesByAmount,
+  getSuperAdminsByPlatform
 };
