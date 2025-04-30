@@ -1,8 +1,8 @@
 const { sendEmail } = require("./mailerController");
 
 const domain = "https://novawifi.online"
-const emailfromaccounts = "accounts@novawifi.online";
-const emailfrominfo = "info@novawifi.online";
+const emailfromaccounts = "NovaWiFi <accounts@novawifi.online>";
+const emailfrominfo = "NovaWiFi <info@novawifi.online>";
 
 const EmailTemplate = async (data) => {
     const { name, email, message, type, subject } = data;

@@ -1,4 +1,4 @@
-const transporter = ("./mailerConfig");
+const transporter = require("./mailerConfig");
 
 const sendEmail = async (data) => {
     const { from, to, subject, message, name } = data;
@@ -35,7 +35,7 @@ const sendEmail = async (data) => {
         console.error("Error sending email:", error);
         return {
             success: false,
-            message: "Failed to send email. Please try again later.",
+            message: `Failed to send email. Please try again later. ${error}`,
         };
     }
 }

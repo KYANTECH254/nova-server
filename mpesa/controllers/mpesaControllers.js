@@ -451,6 +451,13 @@ const handleIntasendCallback = async (req, res) => {
                     message: message
                 }
                 const sendwithdrawalemail = await EmailTemplate(data);
+                if (!sendwithdrawalemail.success) {
+                    return res.status(200).json({
+                        success: false,
+                        message: sendwithdrawalemail.message,
+                        admins: admins
+                    });
+                }
             }
         }
 

@@ -55,6 +55,7 @@ const {
   deleteMikrotikProfile,
   updateMikrotikProfile
 } = require("../mikrotik/contollers/mikrotikController");
+const { EmailTemplate } = require("../mailer/mailerTemplates")
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 
@@ -321,6 +322,25 @@ const registerPlatform = async (req, res) => {
       platformID,
       adminID
     });
+
+    const email = email;
+    const subject = `Account created!`
+    const message = `Hello ${name}.\nYour platform ${name} has been created. Login to your Admin dashboard at https://${url}/admin/login.`;
+    const data = {
+      name: name,
+      type: "accounts",
+      email: email,
+      subject: subject,
+      message: message
+    }
+    const sendwithdrawalemail = await EmailTemplate(data);
+    if (!sendwithdrawalemail.success) {
+      return res.status(200).json({
+        success: false,
+        message: sendwithdrawalemail.message,
+        admins: admins
+      });
+    }
 
     return res.status(201).json({
       success: true,
