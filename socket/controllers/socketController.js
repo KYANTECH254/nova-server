@@ -18,7 +18,6 @@ const SocketInstance = (server) => {
             socket.on("client-data", async (data) => { 
                 
                 try {
-                    console.log(data);
                     const { platform, ip } = data;
                     const platformData = await getPlatformByUrl(platform);
                     socket.emit("platform-data", platformData);
@@ -28,7 +27,6 @@ const SocketInstance = (server) => {
                 }
             });
             socket.on("client-data_2", async (data) => { 
-                console.log(data);
                 try {
                     const { plat_id, ip } = data;
                     const platformData = await getPlatform(plat_id);
@@ -39,7 +37,6 @@ const SocketInstance = (server) => {
                 }
             });
             socket.on("connect-mikrotik", async (data) => {
-                console.log("Socket token:", data.token)
                 const token = data.token;
                 try {
                   const result = await createMikrotikClient(token);

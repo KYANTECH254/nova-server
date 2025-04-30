@@ -6,9 +6,9 @@ const reqRoutes = require("./routes/routes");
 const mikrotikRoutes = require("./mikrotik/routes/mikrotikRoutes");
 const checkAndExpireUsers = require("./mikrotik/cronjobs/cronjob");
 const mpesaRoutes = require("./mpesa/routes/mpesaRoutes");
+const mailRoutes = require("./mailer/mailerRoutes")
 const { SocketInstance } = require("./socket/controllers/socketController");
 require('dotenv').config({ path: path.resolve(__dirname, '.env') });
-
 
 const app = express();
 const server = http.createServer(app);  
@@ -21,6 +21,7 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use("/req", reqRoutes);
 app.use("/mkt", mikrotikRoutes);
 app.use("/mpesa", mpesaRoutes);
+app.use("/mail", mailRoutes);
 
 const io = SocketInstance(server);
 

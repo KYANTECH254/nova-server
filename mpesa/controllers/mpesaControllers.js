@@ -350,12 +350,10 @@ const WithdrawFunds = async (req, res) => {
                 ],
             });
         }
-        console.log(decodeBuffer(resp));
         const response = decodeBuffer(resp);
         const fileID = response.file_id;
         const currentTransaction = response.transactions[0];
         const status = currentTransaction.status;
-        console.log("Response:", decodeBuffer(resp));;
         if (fileID) {
             const mpesaCode = await addMpesaCode({ code: fileID, phone, amount, type: "withdrawal", status, till, paybill, accountReference });
             return res.status(200).json({
@@ -383,8 +381,6 @@ const WithdrawFunds = async (req, res) => {
 
 const handleIntasendCallback = async (req, res) => {
     const { file_id, transactions, challenge } = req.body;
-    console.log("const Intasend_withdrawal_callback = ", req.body);
-
     if (challenge !== process.env.INTASEND_CHALLENGE) {
         return res.status(400).json({
             success: false,

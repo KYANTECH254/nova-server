@@ -65,8 +65,6 @@ const manageMikrotikUser = async (data) => {
       if (!username) {
         throw new Error("username is required for removal");
       }
-
-      // Find user by name
       const existingUsers = await channel.menu('/ip/hotspot/user/print')
         .where('name', username)
         .get();
@@ -77,8 +75,6 @@ const manageMikrotikUser = async (data) => {
           message: `User '${username}' not found`
         };
       }
-
-      // Remove user by ID
       await channel.menu('/ip/hotspot/user/remove')
         .where('.id', existingUsers[0]['.id'])
         .remove();
@@ -347,13 +343,9 @@ const deleteMikrotikProfile = async (platformID, profileName, host) => {
     if (!connection?.channel) {
       throw new Error("No valid MikroTik connection");
     }
-    console.log(platformID, profileName, host);
-
 
     const { channel } = connection;
     const allProfiles = await channel.menu('/ip/hotspot/user/profile/print').get();
-    console.log('All profiles:', allProfiles.map(p => p.name));
-
     const existingProfiles = await channel.menu('/ip/hotspot/user/profile/print')
       .where('name', profileName)
       .get();
@@ -507,8 +499,6 @@ const fetchMikrotikProfiles = async (req, res) => {
 
     try {
       const response = await channel.menu('/ip/hotspot/user/profile').get();
-      console.log('RAW PROFILE RESPONSE:', response);
-
       const profiles = response.map(item => ({
         name: item?.name || '',
         rateLimit: item?.rateLimit || '',

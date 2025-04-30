@@ -106,15 +106,11 @@ const getCode = async (req, res) => {
         .status(400)
         .json({ type: "error", message: "Invalid phone number." });
     }
-    // Try to find by phone (user account)
     const phoneCodes = await getCodesByPhone(phone, platformID);
-    console.log("Codes", phoneCodes);
-
     if (phoneCodes && phoneCodes.length > 0) {
       foundcodes = phoneCodes;
     }
 
-    // If no codes found by phone, try using phone as MPESA code
     if (foundcodes.length === 0) {
       const mpesaCodes = await getCodesByMpesa(phone, platformID);
       if (mpesaCodes && mpesaCodes.length > 0) {
@@ -1478,7 +1474,6 @@ const deleteStations = async (req, res) => {
 
 const addCode = async (req, res) => {
   const { data } = req.body;
-  console.log("Data 2", data)
   if (!data) {
     return res.json({
       success: false,
@@ -1607,7 +1602,8 @@ const fetchDashboardStats = async (req, res) => {
   try {
     let IsB2B = false;
     const platformsettings = await getPlatformConfig(platformID);
-    if (platformsettings) {
+    const role = auth.admin.role;
+    if (platformsettings || role === "superuser") {
       IsB2B = platformsettings.IsB2B;
     }
 

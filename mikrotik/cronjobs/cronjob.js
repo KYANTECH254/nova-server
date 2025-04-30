@@ -5,15 +5,9 @@ const { getPlatforms, getActivePlatformUsers, getStations, updateUser } = requir
 const checkAndExpireUsers = async () => {
     try {
         const platforms = await getPlatforms();
-        console.log("Platforms:", platforms);
-
         for (const platform of platforms) {
             const platformID = platform.platformID;
-            console.log("Platform ID:", platformID);
-
             const routers = await getStations(platformID);
-            console.log("Routers:", routers);
-
             const router = routers[0];
 
             if (!router || !router.mikrotikHost) {
@@ -34,8 +28,6 @@ const checkAndExpireUsers = async () => {
 
             for (const user of users) {
                 const username = user.username;
-                console.log(user);
-
                 if (!username) {
                     console.warn(`User without username found in platform '${platformID}'`);
                     continue;
