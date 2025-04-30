@@ -1,10 +1,11 @@
-const { SendEmail } = require("./mailerController");
+const { sendEmail } = require("./mailerController");
 
 const domain = "https://novawifi.online"
 const emailfromaccounts = "accounts@novawifi.online";
 const emailfrominfo = "info@novawifi.online";
 
-const EmailTemplate = async (name, email, message, type, subject) => {
+const EmailTemplate = async (data) => {
+    const { name, email, message, type, subject } = data;
     const formData = {
         name: name,
         from: type === "info" ? emailfrominfo : emailfromaccounts,
@@ -14,8 +15,8 @@ const EmailTemplate = async (name, email, message, type, subject) => {
     };
 
     try {
-        const data = await SendEmail(formData);
-        return data;
+        const data = await sendEmail(formData);
+        return { success: data.success, message: data.message };
     } catch (error) {
         return { success: false, message: error };
     }

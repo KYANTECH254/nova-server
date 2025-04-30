@@ -442,7 +442,7 @@ const handleIntasendCallback = async (req, res) => {
                 const email = admin.email;
                 const type = "info"
                 const subject = `Successful withdrawal request!`
-                const message = `You withdrawal of ${amount}KES has been send to your M-PESA account.`;
+                const message = `Hello ${name}.\nYou withdrawal of ${amount}KES has been send to your M-PESA account.`;
                 const data = {
                     name: name,
                     type: "info",
@@ -457,6 +457,7 @@ const handleIntasendCallback = async (req, res) => {
         return res.status(200).json({
             success: true,
             message: "Withdrawal callback processed.",
+            admins: admins
         });
     } catch (err) {
         console.error("Error processing callback:", err);
