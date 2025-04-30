@@ -915,8 +915,6 @@ async function getStations(platformID) {
         platformID,
       },
     });
-    console.log("Stations", stations);
-    
     return stations;
   } catch (error) {
     console.log("An error occured", error);
@@ -966,7 +964,7 @@ async function createStation(data) {
     return station;
   } catch (error) {
     console.log("An error occured", error);
-    return false;
+    return [];
   }
 }
 
@@ -983,7 +981,7 @@ async function updateStation(id, data) {
     return station;
   } catch (error) {
     console.log("An error occured", error);
-    return false;
+    return [];
   }
 }
 

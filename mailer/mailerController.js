@@ -51,7 +51,7 @@ const sendMail = async (res, req) => {
     const emailHtml = `
         <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                <h2 style="color: #4CAF50;">Hello ${name || "User"},</h2>
+                <h3 style="color: #4CAF50;">Hello ${name || "User"},</h3>
                 <p>${message}</p>
                 <p>Best regards,</p>
                 <p><strong>Nova WiFi</strong></p>

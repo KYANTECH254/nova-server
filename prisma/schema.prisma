@@ -118,15 +118,17 @@ model PlatformSetting {
 }
 
 model Station {
-  id               String   @unique @default(uuid())
-  name             String
-  platformID       String
-  adminID          String
-  mikrotikHost     String?
-  mikrotikUser     String?
-  mikrotikPassword String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                 String   @unique @default(uuid())
+  name               String
+  platformID         String
+  adminID            String
+  mikrotikHost       String?
+  mikrotikPublicHost String?
+  mikrotikUser       String?
+  mikrotikPassword   String?
+  mikrotikPublicKey  String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model Funds {

@@ -1,5 +1,6 @@
 const axios = require('axios');
 const fs = require("fs");
+const { exec } = require("child_process");
 const path = require("path");
 const moment = require("moment");
 const {
@@ -325,7 +326,7 @@ const registerPlatform = async (req, res) => {
 
     const email = email;
     const subject = `Account created!`
-    const message = `Hello ${name}.\nYour platform ${name} has been created. Login to your Admin dashboard at https://${url}/admin/login.`;
+    const message = `Your platform ${name} has been created. Login to your Admin dashboard at https://${url}/admin/login.`;
     const data = {
       name: name,
       type: "accounts",
@@ -1441,8 +1442,30 @@ const updateStations = async (req, res) => {
     });
   }
 
-  const platformID = data.platformID;
+  const token = data.token;
+  if (!token) {
+    return res.json({
+      success: false,
+      message: "Missing credentials required!",
+    });
+  }
+
+  const auth = await AuthenticateRequest(token);
+  if (!auth.success) {
+    return res.json({
+      success: false,
+      message: auth.message,
+    });
+  }
+
+  const platformID = auth.admin.platformID;
+  const adminID = auth.admin.adminID;
   const stationID = data.id;
+  const mikrotikHost = data.mikrotikHost;
+  const mikrotikPublicHost = data.mikrotikPublicHost;
+  const mikrotikPublicKey = data.mikrotikPublicKey;
+  data.platformID = platformID;
+  data.adminID = adminID;
 
   try {
     let station;
@@ -1450,21 +1473,53 @@ const updateStations = async (req, res) => {
       station = await getStation(stationID);
     }
 
+    let responseMessage;
+    let stationResult;
+
     if (!station) {
-      const { id, ...newData } = data;
+      const { id, token, ...newData } = data;
       const newStation = await createStation(newData);
-      return res.json({
-        success: true,
-        message: "Station added",
-        station: newStation,
-      });
+      responseMessage = "Station added";
+      stationResult = newStation;
+    } else {
+      const updatedStation = await updateStation(stationID, data);
+      responseMessage = "Station updated";
+      stationResult = updatedStation;
     }
-    const updatedStation = await updateStation(stationID, data);
-    return res.json({
-      success: true,
-      message: "Station updated",
-      station: updatedStation,
+
+    // Prepare peer block
+    const peerBlock = `
+
+[Peer]
+PublicKey = ${mikrotikPublicKey}
+Endpoint = ${mikrotikPublicHost}:51820
+AllowedIPs = ${mikrotikHost}
+PersistentKeepalive = 25
+`;
+
+    // Append to /etc/wireguard/wg0.conf
+    fs.appendFile("/etc/wireguard/wg0.conf", peerBlock, (err) => {
+      if (err) {
+        console.error("Failed to write to wg0.conf:", err);
+        return res.json({ success: false, message: "Failed to update WireGuard config." });
+      }
+
+      // Restart WireGuard
+      exec("sudo wg-quick down wg0 && sudo wg-quick up wg0", (error, stdout, stderr) => {
+        if (error) {
+          console.error("Failed to restart WireGuard:", error);
+          return res.json({ success: false, message: "WireGuard restart failed." });
+        }
+
+        console.log("WireGuard restarted successfully:\n", stdout);
+        return res.json({
+          success: true,
+          message: responseMessage + " and WireGuard updated",
+          station: stationResult,
+        });
+      });
     });
+
   } catch (error) {
     console.log("An error occurred", error);
     return res.json({ success: false, message: "An error occurred" });
@@ -1479,18 +1534,59 @@ const deleteStations = async (req, res) => {
       message: "Missing credentials required!",
     });
   }
+
   try {
-    const stations = await deleteStation(id);
-    return res.json({
-      success: true,
-      message: "Station deleted",
-      data: stations,
+    const station = await getStation(id);
+    if (!station) {
+      return res.json({ success: false, message: "Station not found" });
+    }
+
+    const mikrotikPublicKey = station.mikrotikPublicKey;
+
+    // Read wg0.conf
+    fs.readFile("/etc/wireguard/wg0.conf", "utf8", (readErr, data) => {
+      if (readErr) {
+        console.error("Failed to read wg0.conf:", readErr);
+        return res.json({ success: false, message: "Could not read WireGuard config" });
+      }
+
+      // Remove [Peer] block that matches the PublicKey
+      const updatedConfig = data.replace(
+        new RegExp(`\\[Peer\\][^\\[]*?PublicKey = ${mikrotikPublicKey}[^\\[]*?(?=\\n\\[|$)`, "g"),
+        ""
+      );
+
+      // Write the updated config back
+      fs.writeFile("/etc/wireguard/wg0.conf", updatedConfig.trim() + "\n", (writeErr) => {
+        if (writeErr) {
+          console.error("Failed to write updated wg0.conf:", writeErr);
+          return res.json({ success: false, message: "Could not update WireGuard config" });
+        }
+
+        // Restart WireGuard
+        exec("sudo wg-quick down wg0 && sudo wg-quick up wg0", async (execErr, stdout, stderr) => {
+          if (execErr) {
+            console.error("Failed to restart WireGuard:", execErr);
+            return res.json({ success: false, message: "WireGuard restart failed" });
+          }
+
+          const deletedStation = await deleteStation(id);
+
+          return res.json({
+            success: true,
+            message: "Station deleted and WireGuard updated",
+            data: deletedStation,
+          });
+        });
+      });
     });
+
   } catch (error) {
-    console.log("An error occurred", error);
+    console.error("An error occurred", error);
     return res.json({ success: false, message: "An error occurred" });
   }
 };
+
 
 const addCode = async (req, res) => {
   const { data } = req.body;
