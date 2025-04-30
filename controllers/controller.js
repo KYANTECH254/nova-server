@@ -1493,32 +1493,49 @@ const updateStations = async (req, res) => {
 [Peer]
 PublicKey = ${mikrotikPublicKey}
 Endpoint = ${mikrotikPublicHost}:51820
-AllowedIPs = ${mikrotikHost}
+AllowedIPs = ${mikrotikHost}/32
 PersistentKeepalive = 25
 `;
 
-    // Append to /etc/wireguard/wg0.conf
-    fs.appendFile("/etc/wireguard/wg0.conf", peerBlock, (err) => {
-      if (err) {
-        console.error("Failed to write to wg0.conf:", err);
-        return res.json({ success: false, message: "Failed to update WireGuard config." });
+    const wgConfPath = "/etc/wireguard/wg0.conf";
+
+    fs.readFile(wgConfPath, "utf8", (readErr, fileData) => {
+      if (readErr) {
+        console.error("Failed to read wg0.conf:", readErr);
+        return res.json({ success: false, message: "Could not read WireGuard config." });
       }
 
-      // Restart WireGuard
-      exec("sudo wg-quick down wg0 && sudo wg-quick up wg0", (error, stdout, stderr) => {
-        if (error) {
-          console.error("Failed to restart WireGuard:", error);
-          return res.json({ success: false, message: "WireGuard restart failed." });
+      // Remove old block with same PublicKey
+      const blocks = fileData.split(/\n(?=\[Peer])/);
+      const filteredBlocks = blocks.filter(block => !block.includes(`PublicKey = ${mikrotikPublicKey}`));
+
+      // Add new peer block
+      const newConfig = [...filteredBlocks, peerBlock.trim()].join("\n\n").trim() + "\n";
+
+      // Write updated config
+      fs.writeFile(wgConfPath, newConfig, (writeErr) => {
+        if (writeErr) {
+          console.error("Failed to write updated wg0.conf:", writeErr);
+          return res.json({ success: false, message: "Could not update WireGuard config." });
         }
 
-        console.log("WireGuard restarted successfully:\n", stdout);
-        return res.json({
-          success: true,
-          message: responseMessage + " and WireGuard updated",
-          station: stationResult,
+        // Restart WireGuard
+        exec("sudo wg-quick down wg0 && sudo wg-quick up wg0", (execErr, stdout, stderr) => {
+          if (execErr) {
+            console.error("Failed to restart WireGuard:", execErr);
+            return res.json({ success: false, message: "WireGuard restart failed." });
+          }
+
+          console.log("WireGuard restarted successfully:\n", stdout);
+          return res.json({
+            success: true,
+            message: responseMessage + " and WireGuard updated",
+            station: stationResult,
+          });
         });
       });
     });
+
 
   } catch (error) {
     console.log("An error occurred", error);
@@ -1550,14 +1567,15 @@ const deleteStations = async (req, res) => {
         return res.json({ success: false, message: "Could not read WireGuard config" });
       }
 
-      // Remove [Peer] block that matches the PublicKey
-      const updatedConfig = data.replace(
-        new RegExp(`\\[Peer\\][^\\[]*?PublicKey = ${mikrotikPublicKey}[^\\[]*?(?=\\n\\[|$)`, "g"),
-        ""
+      // Split into blocks and remove the one with matching public key
+      const peerBlocks = data.split(/\n(?=\[Peer])/); // Split on every new `[Peer]` block
+      const filteredBlocks = peerBlocks.filter(
+        (block) => !block.includes(`PublicKey = ${mikrotikPublicKey}`)
       );
+      const updatedConfig = filteredBlocks.join("\n").trim() + "\n";
 
       // Write the updated config back
-      fs.writeFile("/etc/wireguard/wg0.conf", updatedConfig.trim() + "\n", (writeErr) => {
+      fs.writeFile("/etc/wireguard/wg0.conf", updatedConfig, (writeErr) => {
         if (writeErr) {
           console.error("Failed to write updated wg0.conf:", writeErr);
           return res.json({ success: false, message: "Could not update WireGuard config" });
@@ -1586,7 +1604,6 @@ const deleteStations = async (req, res) => {
     return res.json({ success: false, message: "An error occurred" });
   }
 };
-
 
 const addCode = async (req, res) => {
   const { data } = req.body;
