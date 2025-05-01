@@ -513,7 +513,7 @@ const handleIntasendDepositCallback = async (req, res) => {
 
         if (state === "COMPLETE") {
             await updateMpesaCode(invoice_id, {
-                code: mpesa_reference,
+                code: invoice_id,
                 status: state,
                 amount: net_amount,
                 platformID: mpesaCode.platformID,
