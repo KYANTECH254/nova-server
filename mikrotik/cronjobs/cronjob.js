@@ -4,7 +4,9 @@ const { getPlatforms, getActivePlatformUsers, getStations, updateUser } = requir
 
 const checkAndExpireUsers = async () => {
     try {
+        const now = new Date(); 
         const platforms = await getPlatforms();
+
         for (const platform of platforms) {
             const platformID = platform.platformID;
             const routers = await getStations(platformID);
@@ -28,30 +30,31 @@ const checkAndExpireUsers = async () => {
 
             for (const user of users) {
                 const username = user.username;
+
                 if (!username) {
                     console.warn(`User without username found in platform '${platformID}'`);
                     continue;
                 }
 
-                const updateuser = await updateUser(user.id, { status: "expired" })
+                const expireAt = new Date(user.expireAt);
+                if (expireAt <= now) {
+                    await updateUser(user.id, { status: "expired" });
 
-                try {
-                    // Fetch the MikroTik user by username to get their ID
-                    const mikrotikUser = await channel.menu('/ip/hotspot/user/print')
-                        .where('name', username)
-                        .get();
+                    try {
+                        const mikrotikUser = await channel.menu('/ip/hotspot/user/print')
+                            .where('name', username)
+                            .get();
 
-                    if (mikrotikUser.length > 0) {
-                        const userId = mikrotikUser[0]['.id'] || mikrotikUser[0].id;
-                        await channel.menu('/ip/hotspot/user/remove').remove({
-                            id: userId
-                        });
-                        console.log(`User ${userId} '${username}' removed from MikroTik (platform: ${platformID})`);
-                    } else {
-                        console.log(`User '${username}' not found on MikroTik, no need to remove.`);
+                        if (mikrotikUser.length > 0) {
+                            const userId = mikrotikUser[0]['.id'] || mikrotikUser[0].id;
+                            await channel.menu('/ip/hotspot/user/remove').remove({ id: userId });
+                            console.log(`User ${userId} '${username}' removed from MikroTik (platform: ${platformID})`);
+                        } else {
+                            console.log(`User '${username}' not found on MikroTik, no need to remove.`);
+                        }
+                    } catch (err) {
+                        console.error(`Failed to remove user '${username}' from MikroTik (platform: ${platformID}):`, err);
                     }
-                } catch (err) {
-                    console.error(`Failed to process user '${username}' for platform '${platformID}':`, err);
                 }
             }
         }

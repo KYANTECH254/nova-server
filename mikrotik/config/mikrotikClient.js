@@ -76,10 +76,10 @@ const createSingleMikrotikClient = async (platformID, host) => {
   try {
     const channel = await api.connect();
     console.log("Connected to MikroTik, channel established:", channel);
-    return { channel };  // Return the channel object if connection is successful
+    return { channel }; 
   } catch (error) {
     console.error(`Connection failed for ${mikrotikHost}:`, error.message);
-    return null;  // Return null if connection fails
+    return null;  
   }
 };
 
