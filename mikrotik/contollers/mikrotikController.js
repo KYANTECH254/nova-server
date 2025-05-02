@@ -450,6 +450,12 @@ const fetchAddressPoolsFromConnections = async (req, res) => {
   }
 
   const connections = await createMikrotikClient(token);
+  if (!connections) {
+    return res.status(400).json({
+      success: false,
+      message: "No valid router connections.",
+    });
+  }
   const validConnections = connections.filter(conn =>
     conn.status === "Connected" && conn.channel
   );
@@ -522,6 +528,12 @@ const fetchMikrotikProfiles = async (req, res) => {
   }
 
   const connections = await createMikrotikClient(token);
+  if (!connections) {
+    return res.status(400).json({
+      success: false,
+      message: "No valid router connections.",
+    });
+  }
   const validConnections = connections.filter(conn =>
     conn.status === "Connected" && conn.channel
   );

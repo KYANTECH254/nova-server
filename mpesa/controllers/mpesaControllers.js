@@ -210,12 +210,11 @@ const callBack = async (req, res) => {
                 package: package
             });
 
-            // Send User Data to Client via WebSocket
-            emitEvent("payment-confirmed", {
-                phone: transactionDetails.phoneNumber,
-                message: "Payment Successful!",
-                transactionDetails,
-                mikrotikUser
+            emitEvent("deposit-success", {
+                status: "COMPLETE",
+                checkoutRequestId: invoice_id,
+                message: "Transaction successful",
+                loginCode: mikrotikUser.code.username
             });
 
             return res.status(200).json({ type: "success", message: "Transaction successful", data: transactionDetails });

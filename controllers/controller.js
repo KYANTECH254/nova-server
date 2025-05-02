@@ -231,8 +231,6 @@ const addPlatform = async (req, res) => {
 
 const registerPlatform = async (req, res) => {
   const { name, email, password, url, platformID, adminID } = req.body;
-
-  // Validate required fields
   if (!name || !url || !email || !password || !platformID || !adminID) {
     return res.status(400).json({
       success: false,
@@ -241,7 +239,6 @@ const registerPlatform = async (req, res) => {
   }
 
   try {
-    // Check if platform already exists
     const checkplatform = await getPlatformByURLData(url);
     if (checkplatform) {
       return res.status(409).json({
@@ -250,7 +247,6 @@ const registerPlatform = async (req, res) => {
       });
     }
 
-    // Check if user already exists
     const user = await getAdminByEmail(email);
     if (user) {
       return res.status(409).json({
@@ -259,7 +255,6 @@ const registerPlatform = async (req, res) => {
       });
     }
 
-    // Get Cloudflare credentials
     const zoneId = process.env.ZONE_ID;
     const apiToken = process.env.API_TOKEN;
 
@@ -270,10 +265,7 @@ const registerPlatform = async (req, res) => {
       });
     }
 
-    // Clean URL for DNS record
     const dnsName = url.replace(/^https?:\/\//, '').split('/')[0];
-
-    // Create DNS record in Cloudflare
     const cfResponse = await axios.post(
       `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`,
       {
@@ -298,12 +290,8 @@ const registerPlatform = async (req, res) => {
         message: `DNS creation failed: ${errorMessages}`,
       });
     }
-
-    // Hash password
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-    // Create admin user
     const token = generateToken(adminID, platformID);
     const newAdmin = await createAdmin({
       platformID,
@@ -324,7 +312,6 @@ const registerPlatform = async (req, res) => {
       adminID
     });
 
-    const email = email;
     const subject = `Account created!`
     const message = `Your platform ${name} has been created. Login to your Admin dashboard at https://${url}/admin/login.`;
     const data = {
@@ -361,7 +348,6 @@ const registerPlatform = async (req, res) => {
 
     let errorMessage = "An error occurred during registration";
     if (error.response) {
-      // Handle axios errors
       errorMessage = error.response.data?.errors?.map(err => err.message).join(', ') || errorMessage;
     } else if (error instanceof Error) {
       errorMessage = error.message;
@@ -1482,44 +1468,33 @@ const updateStations = async (req, res) => {
       responseMessage = "Station added";
       stationResult = newStation;
     } else {
-      const updatedStation = await updateStation(stationID, data);
+      const updatedStation = await updateStation(stationID, newData);
       responseMessage = "Station updated";
       stationResult = updatedStation;
     }
 
-    // Prepare peer block
     const peerBlock = `
 
 [Peer]
 PublicKey = ${mikrotikPublicKey}
-Endpoint = ${mikrotikPublicHost}:51820
+Endpoint = ${mikrotikPublicHost}:13231
 AllowedIPs = ${mikrotikHost}/32
 PersistentKeepalive = 25
 `;
-
     const wgConfPath = "/etc/wireguard/wg0.conf";
-
     fs.readFile(wgConfPath, "utf8", (readErr, fileData) => {
       if (readErr) {
         console.error("Failed to read wg0.conf:", readErr);
         return res.json({ success: false, message: "Could not read WireGuard config." });
       }
-
-      // Remove old block with same PublicKey
       const blocks = fileData.split(/\n(?=\[Peer])/);
       const filteredBlocks = blocks.filter(block => !block.includes(`PublicKey = ${mikrotikPublicKey}`));
-
-      // Add new peer block
       const newConfig = [...filteredBlocks, peerBlock.trim()].join("\n\n").trim() + "\n";
-
-      // Write updated config
       fs.writeFile(wgConfPath, newConfig, (writeErr) => {
         if (writeErr) {
           console.error("Failed to write updated wg0.conf:", writeErr);
           return res.json({ success: false, message: "Could not update WireGuard config." });
         }
-
-        // Restart WireGuard
         exec("sudo wg-quick down wg0 && sudo wg-quick up wg0", (execErr, stdout, stderr) => {
           if (execErr) {
             console.error("Failed to restart WireGuard:", execErr);
@@ -1535,7 +1510,6 @@ PersistentKeepalive = 25
         });
       });
     });
-
 
   } catch (error) {
     console.log("An error occurred", error);
