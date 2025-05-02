@@ -1,11 +1,9 @@
-const { getMikrotikPlatformConfig } = require("../../actions/operations");
+const { getMikrotikPlatformConfig, getPackagesByPlatformID } = require("../../actions/operations");
 const { createMikrotikClient, createSingleMikrotikClient, AuthenticateRequest } = require("../config/mikrotikClient");
 const crypto = require("crypto");
 
 const manageMikrotikUser = async (data) => {
   const { platformID, action, profileName, host } = data;
-
-  // Validate required parameters
   if (!platformID || !action) {
     return {
       success: false,
@@ -24,12 +22,10 @@ const manageMikrotikUser = async (data) => {
     const { channel } = connection;
 
     if (action === "add") {
-      // Validate required fields for add action
       if (!profileName) {
         throw new Error("profileName is required when adding users");
       }
 
-      // Verify the profile exists first
       const existingProfiles = await channel.menu('/ip/hotspot/user/profile/print')
         .where('name', profileName)
         .get();
@@ -41,38 +37,78 @@ const manageMikrotikUser = async (data) => {
         };
       }
 
-      // Generate credentials if not provided
+      const packages = await getPackagesByPlatformID(platformID);
+      if (!packages || packages.length === 0) {
+        return {
+          success: false,
+          message: `No packages found for platform ${platformID}`
+        };
+      }
+
+      const package = packages.find(pkg => pkg.name === profileName);
+      if (!package) {
+        return {
+          success: false,
+          message: `Package for profile '${profileName}' not found`
+        };
+      }
+
+      let uptimeLimit = '';
+      if (package.period && package.period !== 'Unlimited') {
+        uptimeLimit = formatUptime(package.period);
+      }
+
+      let bytesTotal = '';
+      if (package.usage && package.usage !== 'Unlimited') {
+        const [value, unit] = package.usage.split(' ');
+        bytesTotal = convertToBytes(parseFloat(value), unit).toString();
+      }
+
       const cred = generateCode();
       const finalUsername = cred;
       const finalPassword = cred;
 
-      // Create user with the specified profile
-      await channel.menu('/ip/hotspot/user/add').add({
+      const userData = {
         name: finalUsername,
         password: finalPassword,
         profile: profileName
-      });
+      };
+
+      if (uptimeLimit) {
+        userData['limit-uptime'] = uptimeLimit;
+      }
+
+      if (bytesTotal) {
+        userData['limit-bytes-total'] = bytesTotal; 
+      }
+
+      await channel.menu('/ip/hotspot/user/add').add(userData);
 
       return {
         success: true,
         message: "User added successfully",
         username: finalUsername,
         password: finalPassword,
-        profile: profileName
+        profile: profileName,
+        limits: {
+          uptime: package.uptime,
+          data: package.usage,
+          speed: package.speed ? `${package.speed} Mbps` : 'Unlimited'
+        }
       };
     }
     else if (action === "remove") {
-      if (!username) {
+      if (!data.username) {
         throw new Error("username is required for removal");
       }
       const existingUsers = await channel.menu('/ip/hotspot/user/print')
-        .where('name', username)
+        .where('name', data.username)
         .get();
 
       if (existingUsers.length === 0) {
         return {
           success: false,
-          message: `User '${username}' not found`
+          message: `User '${data.username}' not found`
         };
       }
       await channel.menu('/ip/hotspot/user/remove')
@@ -98,10 +134,10 @@ const manageMikrotikUser = async (data) => {
       errorDetails: error.stack,
       action: action,
       profileName: profileName,
-      username: username
+      username: data.username
     };
   }
-};
+}
 
 const createMikrotikProfile = async (
   platformID,
@@ -193,8 +229,6 @@ function formatUptime(input) {
     hours: 'h',
     days: 'd'
   };
-
-  // Split "1 days" into [1, "days"]
   const [value, unit] = input.split(' ');
 
   if (!timeMap[unit]) {
@@ -423,7 +457,7 @@ const fetchAddressPoolsFromConnections = async (req, res) => {
   const results = [];
 
   for (const conn of validConnections) {
-    const { id, host, username, channel } = conn; 
+    const { id, host, username, channel } = conn;
 
     try {
       const response = await channel.menu('/ip/pool').get();

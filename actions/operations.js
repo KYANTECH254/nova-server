@@ -77,7 +77,7 @@ async function updatePlatformConfig(platformID, data) {
       where: { platformID },
       data: {
         ...data,
-        updatedAt: offsetDate,
+        
       },
     });
 
@@ -107,8 +107,8 @@ async function createPlatformConfig(platformID, data) {
       data: {
         platformID,
         ...data,
-        createdAt: offsetDate,
-        updatedAt: offsetDate,
+        
+        
       },
     });
 
@@ -147,8 +147,8 @@ async function createSuperUser(data) {
     const superUser = await prisma.superUser.create({
       data: {
         ...data,
-        createdAt: offsetDate,
-        updatedAt: offsetDate,
+        
+        
       },
     });
     return superUser;
@@ -165,7 +165,7 @@ async function updateSuperUser(data) {
       where: { id: data.id },
       data: {
         ...data,
-        updatedAt: offsetDate,
+        
       },
     });
     return superUser;
@@ -199,8 +199,8 @@ async function createUser(data) {
         package: packageID
           ? { connect: { id: packageID } }
           : { create: data.package },
-        createdAt: offsetDate,
-        updatedAt: offsetDate,
+        
+        
       },
     });
 
@@ -218,7 +218,7 @@ async function updateUser(id, data) {
       where: { id },
       data: {
         ...data,
-        updatedAt: offsetDate,
+        
       },
     });
     return user;
@@ -273,8 +273,8 @@ async function addMpesaCode(data) {
     const mpesaCode = await prisma.mpesa.create({
       data: {
         ...data,
-        createdAt: offsetDate,
-        updatedAt: offsetDate,
+        
+        
       },
     });
     return mpesaCode;
@@ -291,7 +291,7 @@ async function updateMpesaCode(code, data) {
       where: { code },
       data: {
         ...data,
-        updatedAt: offsetDate,
+        
       },
     });
     return mpesaCode;
@@ -333,8 +333,8 @@ async function createAdmin(data) {
     const admin = await prisma.admin.create({
       data: {
         ...data,
-        createdAt: offsetDate,
-        updatedAt: offsetDate,
+        
+        
       },
     });
     return admin;
@@ -351,8 +351,8 @@ async function updateAdmin(id, data) {
       where: { id },
       data: {
         ...data,
-        createdAt: offsetDate,
-        updatedAt: offsetDate,
+        
+        
       },
     });
     return admin;
@@ -381,8 +381,6 @@ async function createPackage(data) {
     const package = await prisma.package.create({
       data: {
         ...data,
-        createdAt: offsetDate,
-        updatedAt: offsetDate,
       },
     });
     return package;
@@ -400,7 +398,6 @@ async function updatePackage(id, platformID, data) {
       where: { id: id },
       data: {
         ...data,
-        updatedAt: offsetDate,
       },
     });
     return package;
@@ -480,8 +477,8 @@ async function createPlatform(data) {
       data: {
         ...data,
         url: slug,
-        createdAt: offsetDate,
-        updatedAt: offsetDate,
+        
+        
       },
     });
 
@@ -499,7 +496,7 @@ async function updatePlatform(id, data) {
       where: { platformID: id },
       data: {
         ...data,
-        updatedAt: offsetDate,
+        
       },
     });
     return platform;
@@ -957,8 +954,6 @@ async function createStation(data) {
     const station = await prisma.station.create({
       data: {
         ...data,
-        createdAt: offsetDate,
-        updatedAt: offsetDate,
       },
     });
     return station;
@@ -975,7 +970,6 @@ async function updateStation(id, data) {
       where: { id },
       data: {
         ...data,
-        updatedAt: offsetDate,
       },
     });
     return station;
@@ -1027,9 +1021,7 @@ async function createFunds(data) {
   try {
     const addfunds = await prisma.funds.create({
       data: {
-        ...data,
-        createdAt: offsetDate,
-        updatedAt: offsetDate,
+        ...data,        
       },
     })
     return addfunds;
@@ -1078,8 +1070,6 @@ async function updateFunds(platformID, data) {
       },
       data: {
         ...data,
-        createdAt: offsetDate,
-        updatedAt: offsetDate,
       },
     })
     return updfunds;

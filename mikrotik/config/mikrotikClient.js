@@ -3,13 +3,11 @@ const { getMikrotikPlatformConfig } = require("../../actions/operations");
 const { AuthenticateRequest } = require("../../controllers/authController");
 
 const createMikrotikClient = async (token) => {
-  if (!token) {
-    return;
-  }
+  if (!token) return null;
+
   const auth = await AuthenticateRequest(token);
-  if (!auth.success) {
-    return;
-  }
+  if (!auth.success) return null;
+
   const platformID = auth.admin.platformID;
   const stations = await getMikrotikPlatformConfig(platformID);
   const connectionResults = [];
@@ -31,6 +29,10 @@ const createMikrotikClient = async (token) => {
       timeout: 30000,
     });
 
+    api.on('error', (err) => {
+      console.error(`RouterOSClient error on ${mikrotikHost}:`, err.message);
+    });
+
     try {
       const channel = await api.connect();
       const identity = await channel.menu('/system/identity').get();
@@ -39,19 +41,25 @@ const createMikrotikClient = async (token) => {
       connectionResults.push({
         id,
         host: mikrotikHost,
-        username: mikrotikUser,  // Ensure 'username' is set correctly
+        username: mikrotikUser,
         status: "Connected",
         channel,
         identity: identity.data?.[0] || {},
       });
     } catch (error) {
       console.error(`Connection failed for ${mikrotikHost}:`, error.message);
-      connectionResults.push({ id, host: mikrotikHost, username: mikrotikUser, status: "Failed" });
+      connectionResults.push({
+        id,
+        host: mikrotikHost,
+        username: mikrotikUser,
+        status: "Failed"
+      });
     }
   }
 
-  return connectionResults;
-}
+  const hasConnected = connectionResults.some(res => res.status === "Connected");
+  return hasConnected ? connectionResults : null;
+};
 
 const createSingleMikrotikClient = async (platformID, host) => {
   const stations = await getMikrotikPlatformConfig(platformID);
@@ -73,13 +81,17 @@ const createSingleMikrotikClient = async (platformID, host) => {
     timeout: 30000,
   });
 
+  api.on('error', (err) => {
+    console.error(`RouterOSClient error on ${mikrotikHost}:`, err.message);
+  });
+
   try {
     const channel = await api.connect();
     console.log("Connected to MikroTik, channel established:", channel);
-    return { channel }; 
+    return { channel };
   } catch (error) {
     console.error(`Connection failed for ${mikrotikHost}:`, error.message);
-    return null;  
+    return null;
   }
 };
 
