@@ -79,7 +79,7 @@ const manageMikrotikUser = async (data) => {
       }
 
       if (bytesTotal) {
-        userData['limit-bytes-total'] = bytesTotal; 
+        userData['limit-bytes-total'] = bytesTotal;
       }
 
       await channel.menu('/ip/hotspot/user/add').add(userData);
@@ -636,6 +636,245 @@ const fetchStations = async (req, res) => {
   }
 };
 
+const updateAddressPool = async (req, res) => {
+  try {
+    const { token, poolData } = req.body;
+    if (!token || !poolData) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required parameters are required",
+      });
+    }
+
+    if (!poolData.name || !poolData.ranges) {
+      return res.status(400).json({
+        success: false,
+        message: "Pool data must include name and ranges",
+      });
+    }
+
+    const ipRangeRegex = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)-((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    if (!ipRangeRegex.test(poolData.ranges.trim())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid IP range format. Must be in format: XXX.XXX.XXX.XXX-XXX.XXX.XXX.XXX",
+        example: "192.168.88.10-192.168.88.254"
+      });
+    }
+    const [startIp, endIp] = poolData.ranges.split('-');
+    const ipToNumber = ip => {
+      const parts = ip.split('.').map(Number);
+      return parts[0] * 256 ** 3 + parts[1] * 256 ** 2 + parts[2] * 256 + parts[3];
+    };
+
+    if (ipToNumber(startIp) > ipToNumber(endIp)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid IP range: Start IP must be less than or equal to End IP",
+        received: poolData.ranges
+      });
+    }
+
+    const auth = await AuthenticateRequest(token);
+    if (!auth.success) {
+      return res.status(401).json({
+        success: false,
+        message: auth.message,
+      });
+    }
+
+    if (!auth.admin.platformID) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing platformID in authentication data",
+      });
+    }
+
+    const connections = await createMikrotikClient(token);
+    if (!connections || !connections.length) {
+      return res.status(400).json({
+        success: false,
+        message: "No router connections available",
+      });
+    }
+
+    const validConnections = connections.filter(conn =>
+      conn.status === "Connected" && conn.channel
+    );
+
+    if (!validConnections.length) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid router connections available",
+      });
+    }
+
+    const results = await Promise.all(
+      validConnections.map(async (conn) => {
+        const { id, host, username, channel } = conn;
+        const resultTemplate = { id, host, username };
+
+        try {
+          const existingPools = await channel.menu('/ip/pool').get();
+          const existingPool = existingPools.find(pool => pool.name === poolData.name);
+          if (existingPool) {
+            await channel.menu('/ip/pool').update(existingPool['.id'], {
+              name: poolData.name,
+              ranges: poolData.ranges,
+              comment: poolData.comment || ''
+            });
+
+            return {
+              ...resultTemplate,
+              status: 'updated',
+              data: poolData,
+              message: `Pool '${poolData.name}' updated successfully`,
+              poolId: existingPool['.id']
+            };
+          } else {
+            // Add new pool
+            const addedPool = await channel.menu('/ip/pool').add({
+              name: poolData.name,
+              ranges: poolData.ranges,
+              comment: poolData.comment || ''
+            });
+
+            return {
+              ...resultTemplate,
+              status: 'added',
+              data: poolData,
+              message: `Pool '${poolData.name}' added successfully`,
+              poolId: addedPool['.id']
+            };
+          }
+        } catch (error) {
+          return {
+            ...resultTemplate,
+            status: 'error',
+            data: null,
+            message: `Failed to process pool: ${error.message}`
+          };
+        }
+      })
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Address pool operation completed",
+      results
+    });
+
+  } catch (error) {
+    console.error("Error in update Address Pool:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message
+    });
+  }
+};
+
+const deleteAddressPool = async (req, res) => {
+  try {
+    const { token, poolData } = req.body;
+    if (!token || !poolData) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required parameters are required",
+      });
+    }
+    const poolName = poolData.name;
+
+    // Authenticate request
+    const auth = await AuthenticateRequest(token);
+    if (!auth.success) {
+      return res.status(401).json({
+        success: false,
+        message: auth.message,
+      });
+    }
+
+    if (!auth.admin.platformID) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing platformID in authentication data",
+      });
+    }
+
+    // Get connections
+    const connections = await createMikrotikClient(token);
+    if (!connections || !connections.length) {
+      return res.status(400).json({
+        success: false,
+        message: "No router connections available",
+      });
+    }
+
+    const validConnections = connections.filter(conn =>
+      conn.status === "Connected" && conn.channel
+    );
+
+    if (!validConnections.length) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid router connections available",
+      });
+    }
+
+    // Process each connection
+    const results = await Promise.all(
+      validConnections.map(async (conn) => {
+        const { id, host, username, channel } = conn;
+        const resultTemplate = { id, host, username };
+
+        try {
+          const existingPools = await channel.menu('/ip/pool').get();
+          const poolToDelete = existingPools.find(pool => pool.name === poolName);
+          if (!poolToDelete) {
+            return {
+              ...resultTemplate,
+              status: 'not_found',
+              data: null,
+              message: `Pool '${poolName}' not found`
+            };
+          }
+
+          // Delete the pool
+          await channel.menu('/ip/pool').remove(poolToDelete['.id']);
+          return {
+            ...resultTemplate,
+            status: 'deleted',
+            data: { poolName },
+            message: `Pool '${poolName}' deleted successfully`,
+            poolId: poolToDelete['.id']
+          };
+        } catch (error) {
+          return {
+            ...resultTemplate,
+            status: 'error',
+            data: null,
+            message: `Failed to delete pool: ${error.message}`
+          };
+        }
+      })
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Address pool deletion completed",
+      results
+    });
+
+  } catch (error) {
+    console.error("Error in deleteAddressPool:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message
+    });
+  }
+};
+
 const formatMikrotikTime = (mikrotikTime) => {
   return mikrotikTime
     .replace(/d/, " days ")
@@ -657,5 +896,7 @@ module.exports = {
   fetchStations,
   updateMikrotikProfile,
   AuthenticateRequest,
-  fetchMikrotikProfiles
+  fetchMikrotikProfiles,
+  updateAddressPool,
+  deleteAddressPool
 };

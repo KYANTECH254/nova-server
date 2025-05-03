@@ -34,7 +34,8 @@ const {
   authManager ,
   fetchSuperDashboardStats,
   fetchAllStations,
-  registerPlatform
+  registerPlatform,
+  UpdateDDNSViaScript
 } = require("../controllers/controller");
 
 // POST
@@ -70,6 +71,7 @@ router.post("/addCode", addCode);
 router.post("/getCodes", getCodes);
 router.post("/stats", fetchDashboardStats);
 router.post("/createAccount", registerPlatform);
+router.post("/updateddns", UpdateDDNSViaScript)
 
 // GET
 router.get("/fetchPlatforms", fetchPlatforms);
