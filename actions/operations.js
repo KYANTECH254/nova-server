@@ -77,7 +77,7 @@ async function updatePlatformConfig(platformID, data) {
       where: { platformID },
       data: {
         ...data,
-        
+
       },
     });
 
@@ -107,8 +107,8 @@ async function createPlatformConfig(platformID, data) {
       data: {
         platformID,
         ...data,
-        
-        
+
+
       },
     });
 
@@ -147,8 +147,8 @@ async function createSuperUser(data) {
     const superUser = await prisma.superUser.create({
       data: {
         ...data,
-        
-        
+
+
       },
     });
     return superUser;
@@ -165,7 +165,7 @@ async function updateSuperUser(data) {
       where: { id: data.id },
       data: {
         ...data,
-        
+
       },
     });
     return superUser;
@@ -199,8 +199,8 @@ async function createUser(data) {
         package: packageID
           ? { connect: { id: packageID } }
           : { create: data.package },
-        
-        
+
+
       },
     });
 
@@ -218,7 +218,7 @@ async function updateUser(id, data) {
       where: { id },
       data: {
         ...data,
-        
+
       },
     });
     return user;
@@ -273,8 +273,8 @@ async function addMpesaCode(data) {
     const mpesaCode = await prisma.mpesa.create({
       data: {
         ...data,
-        
-        
+
+
       },
     });
     return mpesaCode;
@@ -291,7 +291,7 @@ async function updateMpesaCode(code, data) {
       where: { code },
       data: {
         ...data,
-        
+
       },
     });
     return mpesaCode;
@@ -333,8 +333,8 @@ async function createAdmin(data) {
     const admin = await prisma.admin.create({
       data: {
         ...data,
-        
-        
+
+
       },
     });
     return admin;
@@ -351,8 +351,8 @@ async function updateAdmin(id, data) {
       where: { id },
       data: {
         ...data,
-        
-        
+
+
       },
     });
     return admin;
@@ -477,8 +477,8 @@ async function createPlatform(data) {
       data: {
         ...data,
         url: slug,
-        
-        
+
+
       },
     });
 
@@ -496,7 +496,7 @@ async function updatePlatform(id, data) {
       where: { platformID: id },
       data: {
         ...data,
-        
+
       },
     });
     return platform;
@@ -735,7 +735,7 @@ async function getActivePlatformUsers(platformID) {
   try {
     const users = await prisma.user.findMany({
       where: { status: "active", platformID: platformID },
-      select: { id: true, username: true, expireAt:true, createdAt:true, status:true },
+      select: { id: true, username: true, expireAt: true, createdAt: true, status: true },
     });
 
     return users;
@@ -1021,7 +1021,7 @@ async function createFunds(data) {
   try {
     const addfunds = await prisma.funds.create({
       data: {
-        ...data,        
+        ...data,
       },
     })
     return addfunds;
@@ -1073,6 +1073,95 @@ async function updateFunds(platformID, data) {
       },
     })
     return updfunds;
+  } catch (error) {
+    console.error("An error occured:", error);
+    return null;
+  }
+}
+
+async function createDDNS(data) {
+  if (!data) return null;
+  try {
+    const created = await prisma.ddns.create({
+      data
+    })
+    return created;
+  } catch (error) {
+    console.error("An error occured:", error);
+    return null;
+  }
+}
+
+async function updateDDNS(id, data) {
+  if (!data || !id) return null;
+  try {
+    const upd = await prisma.ddns.update({
+      where: {
+        id
+      },
+      data
+    })
+    return upd;
+  } catch (error) {
+    console.error("An error occured:", error);
+    return null;
+  }
+}
+
+async function getDDNS(platformID) {
+  if (!platformID) return null;
+  try {
+    const ddns = await prisma.ddns.findMany({
+      where: {
+        platformID
+      }
+    })
+    return ddns;
+  } catch (error) {
+    console.error("An error occured:", error);
+    return null;
+  }
+}
+
+async function getDDNSById(id) {
+  if (!id) return null;
+  try {
+    const ddns = await prisma.ddns.findUnique({
+      where: {
+        id
+      }
+    })
+    return ddns;
+  } catch (error) {
+    console.error("An error occured:", error);
+    return null;
+  }
+}
+
+async function getDDNSByUrl(url) {
+  if (!url) return null;
+  try {
+    const ddns = await prisma.ddns.findUnique({
+      where: {
+        url
+      }
+    })
+    return ddns;
+  } catch (error) {
+    console.error("An error occured:", error);
+    return null;
+  }
+}
+
+async function deleteDDNS(id) {
+  if (!id) return null;
+  try {
+    const del = await prisma.ddns.delete({
+      where: {
+        id
+      }
+    })
+    return del;
   } catch (error) {
     console.error("An error occured:", error);
     return null;
@@ -1145,5 +1234,11 @@ module.exports = {
   deleteFunds,
   getMpesaCode,
   getPackagesByAmount,
-  getSuperAdminsByPlatform
+  getSuperAdminsByPlatform,
+  createDDNS,
+  updateDDNS,
+  getDDNS,
+  getDDNSById,
+  deleteDDNS,
+  getDDNSByUrl
 };

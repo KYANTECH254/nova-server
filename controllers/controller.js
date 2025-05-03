@@ -47,6 +47,12 @@ const {
   getAllStations,
   getPackagesByID,
   getFunds,
+  createDDNS,
+  updateDDNS,
+  getDDNS,
+  getDDNSById,
+  deleteDDNS,
+  getDDNSByUrl
 } = require("../actions/operations");
 const { AuthenticateRequest } = require("../controllers/authController")
 const {
@@ -1040,7 +1046,7 @@ const fetchSettings = async (req, res) => {
   }
 };
 
-const updateSettings= async (req, res) => {
+const updateSettings = async (req, res) => {
   const { token, data } = req.body;
   if (!token) {
     return res.json({
@@ -1412,32 +1418,174 @@ const addSubdomainToCloudflare = async (data) => {
     };
   }
 
-  const dnsName = url.replace(/^https?:\/\//, '').split('/')[0];
-  const cfResponse = await axios.post(
-    `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`,
-    {
-      type: "A",
-      name: dnsName,
-      content: "16.170.70.95",
-      ttl: 1,
-      proxied: false
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${apiToken}`,
-        "Content-Type": "application/json"
+  try {
+    const dnsName = url.replace(/^https?:\/\//, '').split('/')[0];
+    const cfResponse = await axios.post(
+      `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`,
+      {
+        type: "A",
+        name: dnsName,
+        content: ip || "16.170.70.95",
+        ttl: 1,
+        proxied: false
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          "Content-Type": "application/json"
+        }
       }
+    );
+    if (cfResponse && cfResponse.data && !cfResponse.data.success) {
+      const errorMessages = cfResponse.data.errors ? cfResponse.data.errors.map(err => err.message).join(', ') : 'Unknown error';
+      return {
+        success: false,
+        message: `DNS creation failed: ${errorMessages}`,
+      };
     }
-  );
 
-  if (!cfResponse.data.success) {
-    const errorMessages = cfResponse.data.errors.map(err => err.message).join(', ');
+    return {
+      success: true,
+      message: "DNS record created successfully."
+    };
+
+  } catch (err) {
     return {
       success: false,
-      message: `DNS creation failed: ${errorMessages}`,
+      message: "Internal server error. Please try again later.",
+      error: err
     };
   }
-}
+};
+
+const checkIfCloudflareDNSExists = async (url) => {
+  if (!url) {
+    return {
+      success: false,
+      message: "No subdomain provided.",
+    };
+  }
+
+  const zoneId = process.env.ZONE_ID;
+  const apiToken = process.env.API_TOKEN;
+
+  if (!zoneId || !apiToken) {
+    return {
+      success: false,
+      message: "Internal server error. Missing Cloudflare credentials.",
+    };
+  }
+
+  try {
+    const host = url.replace(/^https?:\/\//, "").split("/")[0];
+    const response = await axios.get(
+      `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records?type=A&name=${host}`,
+      {
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const records = response.data.result || [];
+    if (records.length > 0) {
+      return {
+        success: true,
+        exists: true,
+        message: "DNS record exists in Cloudflare.",
+        record: records[0],
+      };
+    }
+
+    return {
+      success: false,
+      exists: false,
+      message: "DNS record does not exist in Cloudflare.",
+    };
+  } catch (err) {
+    console.error("Cloudflare DNS check error:", err.response?.data || err.message);
+    return {
+      success: false,
+      message: "Failed to check DNS record in Cloudflare.",
+      error: err,
+    };
+  }
+};
+
+const deleteCloudflareDNSRecord = async (url) => {
+  if (!url) {
+    return {
+      success: false,
+      message: "No subdomain provided.",
+    };
+  }
+
+  const zoneId = process.env.ZONE_ID;
+  const apiToken = process.env.API_TOKEN;
+
+  if (!zoneId || !apiToken) {
+    return {
+      success: false,
+      message: "Missing Cloudflare zone ID or API token.",
+    };
+  }
+
+  try {
+    const dnsName = url.replace(/^https?:\/\//, "").split("/")[0];
+
+    // First, find the DNS record ID
+    const lookupResponse = await axios.get(
+      `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records?type=A&name=${dnsName}`,
+      {
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    const record = lookupResponse.data.result[0];
+    if (!record) {
+      return {
+        success: false,
+        message: "DNS record not found in Cloudflare.",
+      };
+    }
+
+    // Then, delete the DNS record
+    const deleteResponse = await axios.delete(
+      `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${record.id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (deleteResponse.data.success) {
+      return {
+        success: true,
+        message: "DNS record deleted successfully.",
+      };
+    } else {
+      return {
+        success: false,
+        message: "Failed to delete DNS record.",
+        errors: deleteResponse.data.errors,
+      };
+    }
+
+  } catch (err) {
+    console.error("Cloudflare DNS delete error:", err.response?.data || err.message);
+    return {
+      success: false,
+      message: "Error occurred while deleting DNS record.",
+      error: err,
+    };
+  }
+};
 
 const fetchAllStations = async (req, res) => {
   try {
@@ -1455,36 +1603,28 @@ const fetchAllStations = async (req, res) => {
 
 const updateStations = async (req, res) => {
   const { data } = req.body;
-  if (!data) {
-    return res.json({
-      success: false,
-      message: "Missing credentials required!",
-    });
+
+  if (!data || !data.token) {
+    return res.json({ success: false, message: "Missing credentials required!" });
   }
 
-  const token = data.token;
-  if (!token) {
-    return res.json({
-      success: false,
-      message: "Missing credentials required!",
-    });
-  }
-
-  const auth = await AuthenticateRequest(token);
+  const auth = await AuthenticateRequest(data.token);
   if (!auth.success) {
-    return res.json({
-      success: false,
-      message: auth.message,
-    });
+    return res.json({ success: false, message: auth.message });
   }
 
   const platformID = auth.admin.platformID;
   const adminID = auth.admin.adminID;
+
   const stationID = data.id;
-  const mikrotikHost = data.mikrotikHost;
-  const mikrotikPublicHost = data.mikrotikPublicHost;
-  const mikrotikPublicKey = data.mikrotikPublicKey;
-  const mikrotikDDNS = data.mikrotikDDNS;
+  const {
+    mikrotikPublicHost,
+    mikrotikHost,
+    mikrotikPublicKey,
+    mikrotikDDNS,
+    name
+  } = data;
+
   data.platformID = platformID;
   data.adminID = adminID;
 
@@ -1498,16 +1638,24 @@ const updateStations = async (req, res) => {
     let stationResult;
 
     if (!station) {
+      const stations = await getStations(platformID);
+      const existingDnsName = stations.find(s => s.mikrotikDDNS === mikrotikDDNS);
+      if (existingDnsName) {
+        return res.json({ success: false, message: "Choose a different router name. DDNS name already exists." });
+      }
+
       const { id, token, ...newData } = data;
       const newStation = await createStation(newData);
       responseMessage = "Station added";
       stationResult = newStation;
+
       if (mikrotikDDNS) {
-        const addddns = await addSubdomainToCloudflare({ mikrotikDDNS });
+        const addddns = await addSubdomainToCloudflare({ url: mikrotikDDNS });
         if (!addddns.success) {
           return res.json({ success: false, message: addddns.message });
         }
       }
+
     } else {
       const { id, token, ...updData } = data;
       const zoneId = process.env.ZONE_ID;
@@ -1522,21 +1670,19 @@ const updateStations = async (req, res) => {
 
       const existingStations = await getStations(platformID);
       const existingStation = existingStations.find(
-        (station) => station.mikrotikDDNS === mikrotikDDNS
+        s => s.mikrotikDDNS === mikrotikDDNS
       );
 
-      const existingDnsName = existingStation?.mikrotikDDNS
-        ?.replace(/^https?:\/\//, '')
-        .split('/')[0];
-      const newDnsName = mikrotikDDNS.replace(/^https?:\/\//, '').split('/')[0];
+      const existingDnsName = existingStation?.mikrotikDDNS?.replace(/^https?:\/\//, '').split('/')[0];
+      const newDnsName = mikrotikDDNS?.replace(/^https?:\/\//, '').split('/')[0];
 
       if (existingDnsName === newDnsName) {
         const updatedStation = await updateStation(stationID, updData);
         responseMessage = "Station updated (no DNS change)";
         stationResult = updatedStation;
       } else {
+        // Clean up old DNS record
         let dnsRecordId = null;
-
         try {
           const listResponse = await axios.get(
             `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records?type=A&name=${existingDnsName}`,
@@ -1547,16 +1693,13 @@ const updateStations = async (req, res) => {
               },
             }
           );
-
           if (listResponse.data.success && listResponse.data.result.length > 0) {
             dnsRecordId = listResponse.data.result[0].id;
           }
         } catch (error) {
           console.error("Error fetching DNS records:", error);
-          // Continue even if the old record doesn't exist
         }
 
-        // Delete old DNS record if it exists
         if (dnsRecordId) {
           try {
             await axios.delete(
@@ -1577,14 +1720,13 @@ const updateStations = async (req, res) => {
           }
         }
 
-        // Create new DNS record
         try {
           const cfResponse = await axios.post(
             `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`,
             {
               type: "A",
               name: newDnsName,
-              content: "16.170.70.95",
+              content: "16.170.70.95", // Set appropriately
               ttl: 1,
               proxied: false,
             },
@@ -1597,7 +1739,7 @@ const updateStations = async (req, res) => {
           );
 
           if (!cfResponse.data.success) {
-            const errorMessages = cfResponse.data.errors.map((err) => err.message).join(", ");
+            const errorMessages = cfResponse.data.errors.map(e => e.message).join(", ");
             return res.status(400).json({
               success: false,
               message: `DNS creation failed: ${errorMessages}`,
@@ -1617,45 +1759,87 @@ const updateStations = async (req, res) => {
       }
     }
 
+    // Validate only mikrotikDDNS, not publicHost
+    try {
+      if (mikrotikDDNS) {
+        const ddnsHost = mikrotikDDNS.replace(/^https?:\/\//, '').split('/')[0];
+        await dns.lookup(ddnsHost);
+      }
+    } catch (err) {
+      return res.json({
+        success: false,
+        message: `Failed to resolve endpoint "${mikrotikDDNS}". Please verify the DDNS is active.`,
+      });
+    }
+
+    let endpointHost;
+    if (mikrotikDDNS) {
+      endpointHost = mikrotikDDNS
+    } else if (mikrotikPublicHost) {
+      endpointHost = mikrotikPublicHost
+    }
+    if (!endpointHost) {
+      return res.json({
+        success: false,
+        message: `Router Public host is required. Please add one!`,
+      });
+    }
+
     const peerBlock = `
 [Peer]
 PublicKey = ${mikrotikPublicKey}
-Endpoint = ${mikrotikDDNS || mikrotikPublicHost}:13231
+Endpoint = ${endpointHost}:13231
 AllowedIPs = ${mikrotikHost}/32
 PersistentKeepalive = 10
 `;
+
     const wgConfPath = "/etc/wireguard/wg0.conf";
+
     fs.readFile(wgConfPath, "utf8", (readErr, fileData) => {
       if (readErr) {
         console.error("Failed to read wg0.conf:", readErr);
         return res.json({ success: false, message: "Could not read WireGuard config." });
       }
+
+      try {
+        fs.copyFileSync(wgConfPath, `${wgConfPath}.bak-${Date.now()}`);
+      } catch (backupErr) {
+        console.error("Backup failed:", backupErr);
+      }
+
       const blocks = fileData.split(/\n(?=\[Peer])/);
       const filteredBlocks = blocks.filter(block => !block.includes(`PublicKey = ${mikrotikPublicKey}`));
       const newConfig = [...filteredBlocks, peerBlock.trim()].join("\n\n").trim() + "\n";
+
       fs.writeFile(wgConfPath, newConfig, (writeErr) => {
         if (writeErr) {
           console.error("Failed to write updated wg0.conf:", writeErr);
           return res.json({ success: false, message: "Could not update WireGuard config." });
         }
-        exec("sudo wg-quick down wg0 && sudo wg-quick up wg0", (execErr, stdout, stderr) => {
-          if (execErr) {
-            console.error("Failed to restart WireGuard:", execErr);
-            return res.json({ success: false, message: "WireGuard restart failed." });
+
+        exec("sudo wg-quick down wg0", (downErr) => {
+          if (downErr) {
+            console.warn("wg-quick down failed, trying to bring interface up directly...");
           }
 
-          console.log("WireGuard restarted successfully:\n", stdout);
-          return res.json({
-            success: true,
-            message: responseMessage + " and WireGuard updated",
-            station: stationResult,
+          exec("sudo wg-quick up wg0", (upErr, stdout, stderr) => {
+            if (upErr) {
+              console.error("Failed to bring up WireGuard:", upErr);
+              return res.json({ success: false, message: "WireGuard start failed." });
+            }
+
+            return res.json({
+              success: true,
+              message: responseMessage + " and WireGuard updated",
+              station: stationResult,
+            });
           });
         });
       });
     });
 
   } catch (error) {
-    console.log("An error occurred", error);
+    console.error("An error occurred:", error);
     return res.json({ success: false, message: "An error occurred" });
   }
 };
@@ -1675,30 +1859,76 @@ const deleteStations = async (req, res) => {
       return res.json({ success: false, message: "Station not found" });
     }
 
-    const mikrotikPublicKey = station.mikrotikPublicKey;
+    const zoneId = process.env.ZONE_ID;
+    const apiToken = process.env.API_TOKEN;
 
-    // Read wg0.conf
+    if (!zoneId || !apiToken) {
+      return res.status(500).json({
+        success: false,
+        message: "Internal server configuration error",
+      });
+    }
+
+    const mikrotikDDNS = station.mikrotikDDNS;
+    if (mikrotikDDNS) {
+      const existingDnsName = mikrotikDDNS.replace(/^https?:\/\//, '').split('/')[0];
+      let dnsRecordId = null;
+      try {
+        const listResponse = await axios.get(
+          `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records?type=A&name=${existingDnsName}`,
+          {
+            headers: {
+              Authorization: `Bearer ${apiToken}`,
+              "Content-Type": "application/json"
+            }
+          }
+        );
+
+        if (listResponse.data.success && listResponse.data.result.length > 0) {
+          dnsRecordId = listResponse.data.result[0].id;
+        }
+      } catch (error) {
+        console.error("Error fetching DNS records:", error);
+        // Continue even if we can't find the old record - might have been deleted manually
+      }
+
+      if (dnsRecordId) {
+        try {
+          await axios.delete(
+            `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${dnsRecordId}`,
+            {
+              headers: {
+                Authorization: `Bearer ${apiToken}`,
+                "Content-Type": "application/json"
+              }
+            }
+          );
+        } catch (error) {
+          console.error("Error deleting DNS record:", error);
+          return res.status(500).json({
+            success: false,
+            message: "Failed to clean up existing DNS record",
+          });
+        }
+      }
+    }
+
+    const mikrotikPublicKey = station.mikrotikPublicKey;
     fs.readFile("/etc/wireguard/wg0.conf", "utf8", (readErr, data) => {
       if (readErr) {
         console.error("Failed to read wg0.conf:", readErr);
         return res.json({ success: false, message: "Could not read WireGuard config" });
       }
-
-      // Split into blocks and remove the one with matching public key
-      const peerBlocks = data.split(/\n(?=\[Peer])/); // Split on every new `[Peer]` block
+      const peerBlocks = data.split(/\n(?=\[Peer])/);
       const filteredBlocks = peerBlocks.filter(
         (block) => !block.includes(`PublicKey = ${mikrotikPublicKey}`)
       );
       const updatedConfig = filteredBlocks.join("\n").trim() + "\n";
-
-      // Write the updated config back
       fs.writeFile("/etc/wireguard/wg0.conf", updatedConfig, (writeErr) => {
         if (writeErr) {
           console.error("Failed to write updated wg0.conf:", writeErr);
           return res.json({ success: false, message: "Could not update WireGuard config" });
         }
-
-        // Restart WireGuard
         exec("sudo wg-quick down wg0 && sudo wg-quick up wg0", async (execErr, stdout, stderr) => {
           if (execErr) {
             console.error("Failed to restart WireGuard:", execErr);
@@ -1974,6 +2204,225 @@ const UpdateDDNSViaScript = async (req, res) => {
   }
 }
 
+const updateDDNSR = async (req, res) => {
+  const { token, ddnsData } = req.body;
+
+  if (!token || !ddnsData) {
+    return res.json({
+      success: false,
+      message: "Missing credentials required!",
+    });
+  }
+
+  try {
+    const auth = await AuthenticateRequest(token);
+    if (!auth.success) {
+      return res.json({
+        success: false,
+        message: auth.message,
+      });
+    }
+    const platformID = auth.admin.platformID;
+    const { id, url, publicIP } = ddnsData;
+
+    if (!url || !publicIP) {
+      return res.json({
+        success: false,
+        message: "DDNS URL and Public IP are required!",
+      });
+    }
+
+    const data = { id, url, publicIP };
+    const existingurl = await getDDNSByUrl(url);
+
+    if (!id) {
+      data.platformID = platformID;
+      const { id: _, ...addData } = data;
+    
+
+      const existingdomain = await checkIfCloudflareDNSExists(url);
+      if (existingdomain.success) {
+        return res.json({
+          success: false,
+          message: "DDNS URL already exists in Cloudflare. Choose a different one!",
+        });
+      }
+
+      const createddns = await createDDNS(addData);
+      const adddomain = await addSubdomainToCloudflare({ ip: publicIP, url });
+
+      if (!adddomain.success) {
+        return res.json({
+          success: false,
+          message: `Failed to create DNS: ${adddomain.message}`,
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: "DDNS created and DNS record added successfully.",
+        data: createddns,
+      });
+
+    } else {
+      const existingDDNS = await getDDNSById(id);
+      if (!existingDDNS) {
+        return res.json({
+          success: false,
+          message: "DDNS record not found.",
+        });
+      }
+
+      if (url !== existingDDNS.url) {
+        await deleteCloudflareDNSRecord(existingDDNS.url);
+        const createforcloudflare = await addSubdomainToCloudflare({ ip: publicIP, url });
+
+        if (!createforcloudflare.success) {
+          return res.json({
+            success: false,
+            message: `Failed to update DNS: ${createforcloudflare.message}`,
+          });
+        }
+      }
+      const { id: _, ...updData } = data;
+      const updated = await updateDDNS(id, updData);
+      return res.json({
+        success: true,
+        message: "DDNS updated successfully.",
+        data: updated,
+      });
+    }
+  } catch (err) {
+    console.error("An error occured", err)
+    return res.json({
+      success: false,
+      message: "An internal error occured, try again.",
+      error: err
+    });
+  }
+};
+
+const fetchDDNS = async (req, res) => {
+  const { token } = req.body;
+
+  if (!token) {
+    return res.json({
+      success: false,
+      message: "Missing credentials required!",
+    });
+  }
+
+  try {
+    const auth = await AuthenticateRequest(token);
+    if (!auth.success) {
+      return res.json({
+        success: false,
+        message: auth.message,
+      });
+    }
+
+    const platformID = auth.admin.platformID;
+
+    const allddns = await getDDNS(platformID);
+    const ddnsWithStatus = await Promise.all(
+      allddns.map(async (ddns) => {
+        const url = ddns.url.startsWith("http") ? ddns.url : `http://${ddns.url}`;
+        const record = await checkIfCloudflareDNSExists(url);
+        const isActive = record.success;
+        return {
+          ...ddns,
+          isActive,
+        };
+      })
+    );
+
+    return res.json({
+      success: true,
+      data: ddnsWithStatus,
+    });
+  } catch (err) {
+    return res.json({
+      success: false,
+      message: "Failed to fetch DDNS records.",
+      error: err.message,
+    });
+  }
+};
+
+const checkIfUrlResolves = async (url) => {
+  if (!url) {
+    return {
+      success: false,
+      message: "No URL provided to check.",
+    };
+  }
+
+  try {
+    const hostname = url.replace(/^https?:\/\//, '').split('/')[0];
+    await dns.lookup(hostname);
+    return {
+      success: true,
+      message: "URL resolves successfully.",
+    };
+  } catch (err) {
+    return {
+      success: false,
+      message: `Failed to resolve URL "${url}". DNS lookup failed.`,
+      error: err,
+    };
+  }
+};
+
+const deteteDDNSR = async (req, res) => {
+  const { token, ddnsData } = req.body;
+
+  if (!token || !ddnsData) {
+    return res.json({
+      success: false,
+      message: "Missing credentials required!",
+    });
+  }
+
+  try {
+    const auth = await AuthenticateRequest(token);
+    if (!auth.success) {
+      return res.json({
+        success: false,
+        message: auth.message,
+      });
+    }
+    const platformID = auth.admin.platformID;
+    const { id, url, publicIP } = ddnsData;
+    if (!id) {
+      return res.json({
+        success: false,
+        message: "Missing required credentials!",
+      });
+    }
+
+    const del = await deleteDDNS(id);
+    const delfromcloudflare = await deleteCloudflareDNSRecord(url);
+    if (delfromcloudflare.success) {
+      return res.json({
+        success: true,
+        message: "DDNS deleted successfully",
+      });
+    } else {
+      return res.json({
+        success: false,
+        message: delfromcloudflare.message,
+      });
+    }
+  } catch (err) {
+    console.err("An error occured", err)
+    return res.json({
+      success: false,
+      message: "An internal error occured, try again.",
+      error: err
+    });
+  }
+}
+
 async function createNginxConfig(subdomain) {
   const serverName = subdomain;
   const config = `
@@ -2050,5 +2499,9 @@ module.exports = {
   fetchSuperDashboardStats,
   fetchAllStations,
   registerPlatform,
-  UpdateDDNSViaScript
+  UpdateDDNSViaScript,
+  checkIfUrlResolves,
+  updateDDNSR,
+  fetchDDNS,
+  deteteDDNSR
 };

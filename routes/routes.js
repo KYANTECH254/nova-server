@@ -35,8 +35,11 @@ const {
   fetchSuperDashboardStats,
   fetchAllStations,
   registerPlatform,
-  UpdateDDNSViaScript
-} = require("../controllers/controller");
+  UpdateDDNSViaScript,
+  fetchDDNS,
+  updateDDNSR,
+  deteteDDNSR
+,} = require("../controllers/controller");
 
 // POST
 router.post("/packages", Packages);
@@ -71,7 +74,10 @@ router.post("/addCode", addCode);
 router.post("/getCodes", getCodes);
 router.post("/stats", fetchDashboardStats);
 router.post("/createAccount", registerPlatform);
-router.post("/updateddns", UpdateDDNSViaScript)
+router.post("/updateddns", UpdateDDNSViaScript);
+router.post("/fetchddns", fetchDDNS)
+router.post("/updatemyddns", updateDDNSR);
+router.post("/deletemyddns", deteteDDNSR)
 
 // GET
 router.get("/fetchPlatforms", fetchPlatforms);
