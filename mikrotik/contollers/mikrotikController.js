@@ -1,6 +1,7 @@
 const { getMikrotikPlatformConfig, getPackagesByPlatformID } = require("../../actions/operations");
 const { createMikrotikClient, createSingleMikrotikClient, AuthenticateRequest } = require("../config/mikrotikClient");
 const crypto = require("crypto");
+let mikrotikClientCache = {}; 
 
 const manageMikrotikUser = async (data) => {
   const { platformID, action, profileName, host } = data;
@@ -646,7 +647,7 @@ const updateAddressPool = async (req, res) => {
       });
     }
 
-    if (!poolData.name || !poolData.ranges) {
+    if (!poolData.name || !poolData.ranges || !poolData.station) {
       return res.status(400).json({
         success: false,
         message: "Pool data must include name and ranges",
@@ -661,6 +662,7 @@ const updateAddressPool = async (req, res) => {
         example: "192.168.88.10-192.168.88.254"
       });
     }
+
     const [startIp, endIp] = poolData.ranges.split('-');
     const ipToNumber = ip => {
       const parts = ip.split('.').map(Number);
@@ -690,80 +692,57 @@ const updateAddressPool = async (req, res) => {
       });
     }
 
-    const connections = await createMikrotikClient(token);
-    if (!connections || !connections.length) {
-      return res.status(400).json({
-        success: false,
-        message: "No router connections available",
-      });
+    let stationClient = mikrotikClientCache[auth.admin.platformID];
+    if (!stationClient) {
+      stationClient = await createSingleMikrotikClient(auth.admin.platformID, poolData.station);
+      if (!stationClient) {
+        return res.status(400).json({
+          success: false,
+          message: "Failed to create MikroTik client",
+        });
+      }
+      mikrotikClientCache[auth.admin.platformID] = stationClient;  
     }
 
-    const validConnections = connections.filter(conn =>
-      conn.status === "Connected" && conn.channel
-    );
+    const channel = stationClient.channel;
 
-    if (!validConnections.length) {
-      return res.status(400).json({
+    try {
+      const existingPools = await channel.menu('/ip/pool').get();
+      const existingPool = existingPools.find(pool => pool.name === poolData.name);
+      const resultTemplate = { host: stationClient.host, username: stationClient.username };
+
+      if (existingPool) {
+        await channel.menu('/ip/pool').update(existingPool['.id'], {
+          name: poolData.name,
+          ranges: poolData.ranges,
+          comment: poolData.comment || ''
+        });
+
+        return res.status(200).json({
+          success: true,
+          message: `Pool '${poolData.name}' updated successfully`,
+          poolId: existingPool['.id']
+        });
+      } else {
+        const addedPool = await channel.menu('/ip/pool').add({
+          name: poolData.name,
+          ranges: poolData.ranges,
+          comment: poolData.comment || ''
+        });
+
+        return res.status(200).json({
+          success: true,
+          message: `Pool '${poolData.name}' added successfully`,
+          poolId: addedPool['.id']
+        });
+      }
+    } catch (error) {
+      console.error("Error processing pool:", error);
+      return res.status(500).json({
         success: false,
-        message: "No valid router connections available",
+        message: `Failed to process pool: ${error.message}`
       });
     }
-
-    const results = await Promise.all(
-      validConnections.map(async (conn) => {
-        const { id, host, username, channel } = conn;
-        const resultTemplate = { id, host, username };
-
-        try {
-          const existingPools = await channel.menu('/ip/pool').get();
-          const existingPool = existingPools.find(pool => pool.name === poolData.name);
-          if (existingPool) {
-            await channel.menu('/ip/pool').update(existingPool['.id'], {
-              name: poolData.name,
-              ranges: poolData.ranges,
-              comment: poolData.comment || ''
-            });
-
-            return {
-              ...resultTemplate,
-              status: 'updated',
-              data: poolData,
-              message: `Pool '${poolData.name}' updated successfully`,
-              poolId: existingPool['.id']
-            };
-          } else {
-            // Add new pool
-            const addedPool = await channel.menu('/ip/pool').add({
-              name: poolData.name,
-              ranges: poolData.ranges,
-              comment: poolData.comment || ''
-            });
-
-            return {
-              ...resultTemplate,
-              status: 'added',
-              data: poolData,
-              message: `Pool '${poolData.name}' added successfully`,
-              poolId: addedPool['.id']
-            };
-          }
-        } catch (error) {
-          return {
-            ...resultTemplate,
-            status: 'error',
-            data: null,
-            message: `Failed to process pool: ${error.message}`
-          };
-        }
-      })
-    );
-
-    return res.status(200).json({
-      success: true,
-      message: "Address pool operation completed",
-      results
-    });
-
   } catch (error) {
     console.error("Error in update Address Pool:", error);
     return res.status(500).json({

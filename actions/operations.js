@@ -1001,7 +1001,7 @@ async function getDailyRevenue(platformID) {
     const payments = await prisma.mpesa.findMany({
       where: {
         platformID,
-        status: "completed",
+        status: "COMPLETE",
         createdAt: {
           gte: midnight,
         },
