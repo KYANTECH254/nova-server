@@ -4,7 +4,7 @@ const {
     fetchStations,
     fetchMikrotikProfiles,
     updateAddressPool,
-    deleteAddressPool
+    deleteAddressPool,
 } = require("../contollers/mikrotikController");
 
 const router = express.Router();

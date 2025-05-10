@@ -1,7 +1,8 @@
 const { getMikrotikPlatformConfig, getPackagesByPlatformID } = require("../../actions/operations");
 const { createMikrotikClient, createSingleMikrotikClient, AuthenticateRequest } = require("../config/mikrotikClient");
 const crypto = require("crypto");
-let mikrotikClientCache = {}; 
+const axios = require('axios');
+let mikrotikClientCache = {};
 
 const manageMikrotikUser = async (data) => {
   const { platformID, action, profileName, host } = data;
@@ -701,7 +702,7 @@ const updateAddressPool = async (req, res) => {
           message: "Failed to create MikroTik client",
         });
       }
-      mikrotikClientCache[auth.admin.platformID] = stationClient;  
+      mikrotikClientCache[auth.admin.platformID] = stationClient;
     }
 
     const channel = stationClient.channel;
@@ -877,5 +878,5 @@ module.exports = {
   AuthenticateRequest,
   fetchMikrotikProfiles,
   updateAddressPool,
-  deleteAddressPool
+  deleteAddressPool,
 };

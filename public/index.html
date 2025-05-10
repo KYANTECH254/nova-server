@@ -27,7 +27,7 @@
         }
 
         getPublicIP().then(ip => {
-            document.getElementById("client-ip").textContent = `Local IP: ${ip}`;
+            document.getElementById("client-ip").textContent = `Public IP: ${ip}`;
             const socket = io();
 
             const statusElement = document.getElementById("status");

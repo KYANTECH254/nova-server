@@ -64,6 +64,7 @@ const {
 const { EmailTemplate } = require("../mailer/mailerTemplates")
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
+const { platform } = require('process');
 
 
 const generateToken = (adminID, platformID) => {
@@ -260,41 +261,32 @@ const registerPlatform = async (req, res) => {
       });
     }
 
-    const zoneId = process.env.ZONE_ID;
-    const apiToken = process.env.API_TOKEN;
+    const siteUser = process.env.SITE_USER;
+    const siteUserPassword = process.env.SITE_PASSWORD;
 
-    if (!zoneId || !apiToken) {
-      return res.status(500).json({
+    if (!siteUser || !siteUserPassword) {
+      return res.json({
         success: false,
-        message: "Internal server error. Please try again later.",
+        message: "Internal error, missing critical configuration files, try again later"
       });
     }
 
-    const dnsName = url.replace(/^https?:\/\//, '').split('/')[0];
-    const cfResponse = await axios.post(
-      `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`,
-      {
-        type: "A",
-        name: dnsName,
-        content: "16.170.70.95",
-        ttl: 1,
-        proxied: false
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${apiToken}`,
-          "Content-Type": "application/json"
-        }
-      }
-    );
-
-    if (!cfResponse.data.success) {
-      const errorMessages = cfResponse.data.errors.map(err => err.message).join(', ');
-      return res.status(400).json({
+    const addProxy = await addReverseProxySite(url, `http://localhost:3001`, siteUser, siteUserPassword);
+    if (!addProxy.success) {
+      return res.json({
         success: false,
-        message: `DNS creation failed: ${errorMessages}`,
+        message: "Reverse proxy creation failed."
       });
     }
+
+    const addSSL = await installLetsEncryptCert(url);
+    if (!addSSL.success) {
+      return res.json({
+        success: false,
+        message: addSSL.message
+      });
+    }
+
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltRounds);
     const token = generateToken(adminID, platformID);
@@ -312,7 +304,7 @@ const registerPlatform = async (req, res) => {
     // Create platform
     const newPlatform = await createPlatform({
       name,
-      url: dnsName,
+      url: url,
       platformID,
       adminID
     });
@@ -451,11 +443,20 @@ const LoginAdmin = async (req, res) => {
     }
     const token = generateToken(user.adminID, user.platformID);
     const upd = await updateAdmin(user.id, { token: token });
+    const platform = await getPlatform(user.platformID);
+    if (!platform) {
+      return res.json({
+        success: false,
+        message: "Platfrom does not exist!",
+      });
+    }
+    const domain = platform.url;
     return res.json({
       success: true,
       message: "Login successful!",
       token: token,
       user,
+      domain
     });
   } catch (error) {
     console.error("Login error:", error);
@@ -1250,89 +1251,42 @@ const updateName = async (req, res) => {
       });
     }
 
-    const zoneId = process.env.ZONE_ID;
-    const apiToken = process.env.API_TOKEN;
-
-    if (!zoneId || !apiToken) {
-      return res.status(500).json({
-        success: false,
-        message: "Internal server configuration error",
-      });
-    }
-
     const existingDnsName = existingPlatform.url.replace(/^https?:\/\//, '').split('/')[0];
     const newDnsName = url.replace(/^https?:\/\//, '').split('/')[0];
-    let dnsRecordId = null;
-    try {
-      const listResponse = await axios.get(
-        `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records?type=A&name=${existingDnsName}`,
-        {
-          headers: {
-            Authorization: `Bearer ${apiToken}`,
-            "Content-Type": "application/json"
-          }
-        }
-      );
+    if (newDnsName !== existingDnsName) {
+      const siteUser = process.env.SITE_USER;
+      const siteUserPassword = process.env.SITE_PASSWORD;
 
-      if (listResponse.data.success && listResponse.data.result.length > 0) {
-        dnsRecordId = listResponse.data.result[0].id;
-      }
-    } catch (error) {
-      console.error("Error fetching DNS records:", error);
-      // Continue even if we can't find the old record - might have been deleted manually
-    }
-
-    if (dnsRecordId) {
-      try {
-        await axios.delete(
-          `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${dnsRecordId}`,
-          {
-            headers: {
-              Authorization: `Bearer ${apiToken}`,
-              "Content-Type": "application/json"
-            }
-          }
-        );
-      } catch (error) {
-        console.error("Error deleting DNS record:", error);
-        return res.status(500).json({
+      if (!siteUser || !siteUserPassword) {
+        return res.json({
           success: false,
-          message: "Failed to clean up existing DNS record",
+          message: "Internal error, missing critical configuration files, try again later"
         });
       }
-    }
 
-    try {
-      const cfResponse = await axios.post(
-        `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`,
-        {
-          type: "A",
-          name: newDnsName,
-          content: "16.170.70.95",
-          ttl: 1,
-          proxied: false
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${apiToken}`,
-            "Content-Type": "application/json"
-          }
-        }
-      );
-
-      if (!cfResponse.data.success) {
-        const errorMessages = cfResponse.data.errors.map(err => err.message).join(', ');
-        return res.status(400).json({
+      const delsite = await deleteSiteRecord(existingDnsName);
+      if (!delsite.success) {
+        return res.json({
           success: false,
-          message: `DNS creation failed: ${errorMessages}`,
+          message: delsite.message
         });
       }
-    } catch (error) {
-      console.error("DNS creation error:", error);
-      return res.status(500).json({
-        success: false,
-        message: "Failed to create new DNS record",
-      });
+
+      const addProxy = await addReverseProxySite(url, `http://localhost:3001`, siteUser, siteUserPassword);
+      if (!addProxy.success) {
+        return res.json({
+          success: false,
+          message: "Reverse proxy creation failed."
+        });
+      }
+
+      const addSSL = await installLetsEncryptCert(url);
+      if (!addSSL.success) {
+        return res.json({
+          success: false,
+          message: addSSL.message
+        });
+      }
     }
 
     const data = { name, url: newDnsName };
@@ -1625,18 +1579,41 @@ const updateStations = async (req, res) => {
     name
   } = data;
 
+  if (!name || !mikrotikHost || !mikrotikPublicKey) {
+    return res.json({ success: false, message: "Missing required station details." });
+  }
+
   data.platformID = platformID;
   data.adminID = adminID;
 
+  const platformData = await getPlatform(platformID);
+  if (!platformData) {
+    return res.json({ success: false, message: "Platform doesn't exist." });
+  }
+
+  const platformURL = platformData.url;
+  const sanitizeSubdomain = (name) => {
+    return name
+      .toLowerCase()                     // lowercase only
+      .trim()                            // remove leading/trailing spaces
+      .replace(/\s+/g, '-')              // spaces → dashes
+      .replace(/[^a-z0-9-]/g, '')        // remove special characters
+      .replace(/-+/g, '-')               // collapse multiple dashes
+      .replace(/^-+|-+$/g, '');          // remove leading/trailing dashes
+  };
+
+  const mikrotikWebfigHost = `${sanitizeSubdomain(name)}-webfig.novawifi.online`;
+  data.mikrotikWebfigHost = mikrotikWebfigHost;
+
+  let station;
+  if (stationID !== "") {
+    station = await getStation(stationID);
+  }
+
+  let responseMessage;
+  let stationResult;
+
   try {
-    let station;
-    if (stationID !== "") {
-      station = await getStation(stationID);
-    }
-
-    let responseMessage;
-    let stationResult;
-
     if (!station) {
       const stations = await getStations(platformID);
       const existingDnsName = stations.find(s => s.mikrotikDDNS === mikrotikDDNS);
@@ -1646,143 +1623,19 @@ const updateStations = async (req, res) => {
 
       const { id, token, ...newData } = data;
       const newStation = await createStation(newData);
-      responseMessage = "Station added";
       stationResult = newStation;
-
-      if (mikrotikDDNS) {
-        const addddns = await addSubdomainToCloudflare({ url: mikrotikDDNS });
-        if (!addddns.success) {
-          return res.json({ success: false, message: addddns.message });
-        }
-      }
+      responseMessage = "Station added";
 
     } else {
       const { id, token, ...updData } = data;
-      const zoneId = process.env.ZONE_ID;
-      const apiToken = process.env.API_TOKEN;
-
-      if (!zoneId || !apiToken) {
-        return res.status(500).json({
-          success: false,
-          message: "Internal server configuration error",
-        });
-      }
-
-      const existingStations = await getStations(platformID);
-      const existingStation = existingStations.find(
-        s => s.mikrotikDDNS === mikrotikDDNS
-      );
-
-      const existingDnsName = existingStation?.mikrotikDDNS?.replace(/^https?:\/\//, '').split('/')[0];
-      const newDnsName = mikrotikDDNS?.replace(/^https?:\/\//, '').split('/')[0];
-
-      if (existingDnsName === newDnsName) {
-        const updatedStation = await updateStation(stationID, updData);
-        responseMessage = "Station updated (no DNS change)";
-        stationResult = updatedStation;
-      } else {
-        // Clean up old DNS record
-        let dnsRecordId = null;
-        try {
-          const listResponse = await axios.get(
-            `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records?type=A&name=${existingDnsName}`,
-            {
-              headers: {
-                Authorization: `Bearer ${apiToken}`,
-                "Content-Type": "application/json",
-              },
-            }
-          );
-          if (listResponse.data.success && listResponse.data.result.length > 0) {
-            dnsRecordId = listResponse.data.result[0].id;
-          }
-        } catch (error) {
-          console.error("Error fetching DNS records:", error);
-        }
-
-        if (dnsRecordId) {
-          try {
-            await axios.delete(
-              `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${dnsRecordId}`,
-              {
-                headers: {
-                  Authorization: `Bearer ${apiToken}`,
-                  "Content-Type": "application/json",
-                },
-              }
-            );
-          } catch (error) {
-            console.error("Error deleting DNS record:", error);
-            return res.status(500).json({
-              success: false,
-              message: "Failed to clean up existing DNS record",
-            });
-          }
-        }
-
-        try {
-          const cfResponse = await axios.post(
-            `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records`,
-            {
-              type: "A",
-              name: newDnsName,
-              content: "16.170.70.95", // Set appropriately
-              ttl: 1,
-              proxied: false,
-            },
-            {
-              headers: {
-                Authorization: `Bearer ${apiToken}`,
-                "Content-Type": "application/json",
-              },
-            }
-          );
-
-          if (!cfResponse.data.success) {
-            const errorMessages = cfResponse.data.errors.map(e => e.message).join(", ");
-            return res.status(400).json({
-              success: false,
-              message: `DNS creation failed: ${errorMessages}`,
-            });
-          }
-        } catch (error) {
-          console.error("DNS creation error:", error);
-          return res.status(500).json({
-            success: false,
-            message: "Failed to create new DNS record",
-          });
-        }
-
-        const updatedStation = await updateStation(stationID, updData);
-        responseMessage = "Station updated";
-        stationResult = updatedStation;
-      }
+      const updatedStation = await updateStation(stationID, updData);
+      stationResult = updatedStation;
+      responseMessage = "Station updated";
     }
 
-    // Validate only mikrotikDDNS, not publicHost
-    try {
-      if (mikrotikDDNS) {
-        const ddnsHost = mikrotikDDNS.replace(/^https?:\/\//, '').split('/')[0];
-        await dns.lookup(ddnsHost);
-      }
-    } catch (err) {
-      return res.json({
-        success: false,
-        message: `Failed to resolve endpoint "${mikrotikDDNS}". Please verify the DDNS is active.`,
-      });
-    }
-
-    let endpointHost;
-    if (mikrotikDDNS) {
-      endpointHost = mikrotikDDNS
-    } else if (mikrotikPublicHost) {
-      endpointHost = mikrotikPublicHost
-    }
+    const endpointHost = mikrotikDDNS || mikrotikPublicHost;
     if (!endpointHost) {
-      return res.json({
-        success: false,
-        message: `Router Public host is required. Please add one!`,
-      });
+      return res.json({ success: false, message: "Public router host is required." });
     }
 
     const peerBlock = `
@@ -1797,40 +1650,44 @@ PersistentKeepalive = 10
 
     fs.readFile(wgConfPath, "utf8", (readErr, fileData) => {
       if (readErr) {
-        console.error("Failed to read wg0.conf:", readErr);
-        return res.json({ success: false, message: "Could not read WireGuard config." });
+        return res.json({ success: false, message: "WireGuard config read failed." });
       }
 
-      try {
-        fs.copyFileSync(wgConfPath, `${wgConfPath}.bak-${Date.now()}`);
-      } catch (backupErr) {
-        console.error("Backup failed:", backupErr);
-      }
+      fs.copyFileSync(wgConfPath, `${wgConfPath}.bak-${Date.now()}`);
 
       const blocks = fileData.split(/\n(?=\[Peer])/);
-      const filteredBlocks = blocks.filter(block => !block.includes(`PublicKey = ${mikrotikPublicKey}`));
-      const newConfig = [...filteredBlocks, peerBlock.trim()].join("\n\n").trim() + "\n";
+      const filtered = blocks.filter(b => !b.includes(`PublicKey = ${mikrotikPublicKey}`));
+      const newConfig = [...filtered, peerBlock.trim()].join("\n\n").trim() + "\n";
 
       fs.writeFile(wgConfPath, newConfig, (writeErr) => {
         if (writeErr) {
-          console.error("Failed to write updated wg0.conf:", writeErr);
-          return res.json({ success: false, message: "Could not update WireGuard config." });
+          return res.json({ success: false, message: "WireGuard config write failed." });
         }
 
-        exec("sudo wg-quick down wg0", (downErr) => {
-          if (downErr) {
-            console.warn("wg-quick down failed, trying to bring interface up directly...");
-          }
-
-          exec("sudo wg-quick up wg0", (upErr, stdout, stderr) => {
+        exec("sudo wg-quick down wg0", () => {
+          exec("sudo wg-quick up wg0", async (upErr) => {
             if (upErr) {
-              console.error("Failed to bring up WireGuard:", upErr);
-              return res.json({ success: false, message: "WireGuard start failed." });
+              return res.json({ success: false, message: "WireGuard restart failed." });
+            }
+
+            const siteUser = process.env.SITE_USER;
+            const siteUserPassword = process.env.SITE_PASSWORD;
+            if (!siteUser || !siteUserPassword) {
+              return res.json({ success: false, message: "Internal error, missing critical configuration files, try again later" });
+            }
+            const addProxy = await addReverseProxySite(mikrotikWebfigHost, `http://${mikrotikHost}`, siteUser, siteUserPassword);
+            if (!addProxy.success) {
+              return res.json({ success: false, message: "Reverse proxy creation failed." });
+            }
+
+            const addSSL = await installLetsEncryptCert(mikrotikWebfigHost);
+            if (!addSSL.success) {
+              return res.json({ success: false, message: "SSL installation failed." });
             }
 
             return res.json({
               success: true,
-              message: responseMessage + " and WireGuard updated",
+              message: `${responseMessage} and WireGuard updated.`,
               station: stationResult,
             });
           });
@@ -1839,8 +1696,8 @@ PersistentKeepalive = 10
     });
 
   } catch (error) {
-    console.error("An error occurred:", error);
-    return res.json({ success: false, message: "An error occurred" });
+    console.error("Station update error:", error);
+    return res.json({ success: false, message: "Internal server error." });
   }
 };
 
@@ -1869,47 +1726,14 @@ const deleteStations = async (req, res) => {
       });
     }
 
-    const mikrotikDDNS = station.mikrotikDDNS;
-    if (mikrotikDDNS) {
-      const existingDnsName = mikrotikDDNS.replace(/^https?:\/\//, '').split('/')[0];
-      let dnsRecordId = null;
-      try {
-        const listResponse = await axios.get(
-          `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records?type=A&name=${existingDnsName}`,
-          {
-            headers: {
-              Authorization: `Bearer ${apiToken}`,
-              "Content-Type": "application/json"
-            }
-          }
-        );
-
-        if (listResponse.data.success && listResponse.data.result.length > 0) {
-          dnsRecordId = listResponse.data.result[0].id;
-        }
-      } catch (error) {
-        console.error("Error fetching DNS records:", error);
-        // Continue even if we can't find the old record - might have been deleted manually
-      }
-
-      if (dnsRecordId) {
-        try {
-          await axios.delete(
-            `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${dnsRecordId}`,
-            {
-              headers: {
-                Authorization: `Bearer ${apiToken}`,
-                "Content-Type": "application/json"
-              }
-            }
-          );
-        } catch (error) {
-          console.error("Error deleting DNS record:", error);
-          return res.status(500).json({
-            success: false,
-            message: "Failed to clean up existing DNS record",
-          });
-        }
+    const mikrotikWebfigHost = station.mikrotikWebfigHost;
+    if (mikrotikWebfigHost) {
+      const delsite = await deleteSiteRecord(mikrotikWebfigHost);
+      if (!delsite.success) {
+        return res.json({
+          success: false,
+          message: delsite.message
+        });
       }
     }
 
@@ -2238,7 +2062,7 @@ const updateDDNSR = async (req, res) => {
     if (!id) {
       data.platformID = platformID;
       const { id: _, ...addData } = data;
-    
+
 
       const existingdomain = await checkIfCloudflareDNSExists(url);
       if (existingdomain.success) {
@@ -2423,42 +2247,85 @@ const deteteDDNSR = async (req, res) => {
   }
 }
 
-async function createNginxConfig(subdomain) {
-  const serverName = subdomain;
-  const config = `
-server {
-    listen 80;
-    server_name ${serverName};
+const installLetsEncryptCert = async (domain) => {
+  const cmd = `clpctl lets-encrypt:install:certificate --domainName=${domain}`;
 
-    location / {
-        proxy_pass http://localhost:3001;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-}`;
+  return new Promise((resolve) => {
+    exec(cmd, (err, stdout, stderr) => {
+      if (err) {
+        console.error(`[LetsEncrypt] ERROR (raw):`, err);
+        return resolve({
+          success: false,
+          message: `LetsEncrypt certificate installation failed for ${domain}`,
+          error: stderr || err.message,
+          stdout,
+        });
+      }
 
-  // Save to /etc/nginx/sites-available/{subdomain}.conf
-  const configPath = `/etc/nginx/sites-available/${subdomain}.conf`;
-  fs.writeFileSync(configPath, config);
-
-  // Symlink to sites-enabled
-  const enabledPath = `/etc/nginx/sites-enabled/${subdomain}.conf`;
-  fs.symlinkSync(configPath, enabledPath);
-
-  // Reload Nginx to apply the config
-  const { exec } = require("child_process");
-  exec("systemctl reload nginx", (err, stdout, stderr) => {
-    if (err) {
-      console.error("Failed to reload Nginx:", stderr);
-    } else {
-      console.log("Nginx reloaded successfully.");
-    }
+      console.log(`[LetsEncrypt] SUCCESS: ${stdout}`);
+      resolve({
+        success: true,
+        message: `LetsEncrypt certificate installed for ${domain}`,
+        output: stdout
+      });
+    });
   });
-}
+};
 
+const deleteSiteRecord = async (domain) => {
+  const cmd = `clpctl site:delete --domainName=${domain} --force`;
+
+  return new Promise((resolve) => {
+    exec(cmd, (err, stdout, stderr) => {
+      if (err) {
+        console.error(`[Delete] ERROR (raw):`, err);
+        return resolve({
+          success: false,
+          message: `Delete site failed for ${domain}`,
+          error: stderr || err.message,
+          stdout,
+        });
+      }
+
+      console.log(`[Delete] SUCCESS: ${stdout}`);
+      resolve({
+        success: true,
+        message: `Deleted site ${domain}`,
+        output: stdout
+      });
+    });
+  });
+};
+
+const addReverseProxySite = async (domain, targetUrl, siteUser, siteUserPassword) => {
+  const cmd = [
+    'clpctl site:add:reverse-proxy',
+    `--domainName=${domain}`,
+    `--reverseProxyUrl='${targetUrl}'`,
+    `--siteUser=${siteUser}`,
+    `--siteUserPassword='${siteUserPassword}'`
+  ].join(' ');
+
+  return new Promise((resolve) => {
+    exec(cmd, (err, stdout, stderr) => {
+      if (err) {
+        console.error(`[ReverseProxy] Error for domain "${domain}":`, stderr || err.message);
+        return resolve({
+          success: false,
+          message: `Failed to add reverse proxy site for ${domain}`,
+          error: stderr || err.message
+        });
+      }
+
+      console.log(`[ReverseProxy] Success for domain "${domain}":`, stdout);
+      resolve({
+        success: true,
+        message: `Reverse proxy site added for ${domain}`,
+        output: stdout
+      });
+    });
+  });
+};
 
 module.exports = {
   AuthenticateRequest,
