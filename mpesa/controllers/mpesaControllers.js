@@ -20,7 +20,9 @@ const {
     getMpesaCode,
     createFunds,
     getPackagesByAmount,
-    getSuperAdminsByPlatform
+    getSuperAdminsByPlatform,
+    getUserByCode,
+    getMpesaByCode
 } = require("../../actions/operations");
 const { emitEvent } = require("../../socket/controllers/socketController");
 const { manageMikrotikUser, AuthenticateRequest } = require("../../mikrotik/contollers/mikrotikController");
@@ -138,7 +140,8 @@ const stkPush = async (req, res) => {
                 amount: amount,
                 code: checkoutRequestId,
                 phone: phone,
-                status: "PENDING"
+                status: "PENDING",
+                reqcode: checkoutRequestId
             };
             const addMpesaCodeTodb = await addMpesaCode(mpesaCode);
             if (addMpesaCodeTodb) {
@@ -546,7 +549,8 @@ const handleIntasendDepositCallback = async (req, res) => {
                 phone: mpesaCode.phone,
                 packageID: pkg.id,
                 platformID: mpesaCode.platformID,
-                package: pkg
+                package: pkg,
+                code: invoice_id,
             }
             const addcodetorouter = await addManualCode(data);
             if (!addcodetorouter.success) {
@@ -591,6 +595,67 @@ const handleIntasendDepositCallback = async (req, res) => {
     }
 }
 
+const checkPayment = async (req, res) => {
+    const {
+        code
+    } = req.body;
+
+    if (!code) {
+        return res.status(400).json({
+            success: false,
+            message: "Mpesa code is required",
+        });
+    }
+
+    try {
+        const getuser = await getMpesaByCode(code);
+        if (!getuser) {
+            return res.status(404).json({
+                success: false,
+                message: "MPesa information not found for the given invoice ID.",
+            });
+        }
+        const state = getuser.status;
+        if (state === "COMPLETE") {
+            const userlogincode = await getUserByCode(code)
+            if (!userlogincode) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Mikrotik user information not found.",
+                });
+            }
+            return res.status(200).json({
+                success: true,
+                message: "Payment received succesfully.",
+                status: state,
+                checkoutRequestId: getuser.code,
+                loginCode: userlogincode.username
+            });
+        } else if (state === "PENDING") {
+            return res.status(200).json({
+                success: false,
+                message: "Waiting for Payment.",
+                status: state,
+                checkoutRequestId: getuser.code,
+            });
+        } else if (state === "FAILED") {
+            return res.status(200).json({
+                success: false,
+                message: "Payment failed try again.",
+                status: state,
+                checkoutRequestId: getuser.code,
+            });
+        }
+    } catch (err) {
+        console.error("Error processing payment:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Internal server error while processing payment.",
+            error: err.message,
+        });
+    }
+}
+
 const validateWithdrawalAmount = (amount) => {
     if (!amount) return false;
     const num = parseFloat(amount);
@@ -616,4 +681,12 @@ const decodeBuffer = (data) => {
     return data;
 };
 
-module.exports = { stkPush, callBack, formatPhoneNumber, WithdrawFunds, handleIntasendCallback, handleIntasendDepositCallback };
+module.exports = {
+    stkPush,
+    callBack,
+    formatPhoneNumber,
+    WithdrawFunds,
+    handleIntasendCallback,
+    handleIntasendDepositCallback,
+    checkPayment
+};

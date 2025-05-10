@@ -15,7 +15,7 @@ const addManualCode = async (data) => {
         };
     }
 
-    const { phone, packageID, platformID, package } = data;
+    const { phone, packageID, platformID, package, code } = data;
 
     try {
         const pkg = await getPackagesByID(packageID);
@@ -80,8 +80,9 @@ const addManualCode = async (data) => {
                 }
             }
 
-            const code = await createUser({
+            const addedcode = await createUser({
                 status: "active",
+                code: code,
                 platformID: platformID,
                 phone: phone,
                 username: addUserToMikrotik.username,
@@ -92,7 +93,7 @@ const addManualCode = async (data) => {
             return {
                 success: true,
                 message: "Code added successfully",
-                code: code,
+                code: addedcode,
             };
         } else {
             return {

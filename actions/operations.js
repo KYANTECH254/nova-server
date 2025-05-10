@@ -267,6 +267,19 @@ async function getUserByToken(token) {
   }
 }
 
+async function getUserByCode(code) {
+  if (!code) return null;
+  try {
+    const user = await prisma.user.findFirst({
+      where: { code },
+    });
+    return user;
+  } catch (error) {
+    console.error("Error fetching user by token:", error);
+    throw error;
+  }
+}
+
 async function addMpesaCode(data) {
   if (!data) return null;
   try {
@@ -319,6 +332,19 @@ async function getMpesaCode(code) {
   try {
     const mpesaCode = await prisma.mpesa.findUnique({
       where: { code },
+    });
+    return mpesaCode;
+  } catch (error) {
+    console.error("Error deleting mpesa code:", error);
+    throw error;
+  }
+}
+
+async function getMpesaByCode(code) {
+  if (!code) return null;
+  try {
+    const mpesaCode = await prisma.mpesa.findFirst({
+      where: { reqcode: code },
     });
     return mpesaCode;
   } catch (error) {
@@ -1240,5 +1266,7 @@ module.exports = {
   getDDNS,
   getDDNSById,
   deleteDDNS,
-  getDDNSByUrl
+  getDDNSByUrl,
+  getUserByCode,
+  getMpesaByCode
 };

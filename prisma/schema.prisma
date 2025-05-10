@@ -26,6 +26,7 @@ model User {
 model Mpesa {
   id         String   @unique @default(uuid())
   code       String   @unique
+  reqcode    String?
   phone      String
   till       String?
   paybill    String?
