@@ -5,7 +5,7 @@ const axios = require('axios');
 let mikrotikClientCache = {};
 
 const manageMikrotikUser = async (data) => {
-  const { platformID, action, profileName, host } = data;
+  const { platformID, action, profileName, host, username } = data;
   if (!platformID || !action) {
     return {
       success: false,
@@ -98,25 +98,27 @@ const manageMikrotikUser = async (data) => {
           speed: package.speed ? `${package.speed} Mbps` : 'Unlimited'
         }
       };
-    }
-    else if (action === "remove") {
-      if (!data.username) {
-        throw new Error("username is required for removal");
+    } else if (action === "remove") {
+      if (!username) {
+        return {
+          success: true,
+          message: `username is required for removal`
+        };
       }
+
       const existingUsers = await channel.menu('/ip/hotspot/user/print')
-        .where('name', data.username)
+        .where('name', username)
         .get();
 
       if (existingUsers.length === 0) {
         return {
-          success: false,
-          message: `User '${data.username}' not found`
+          success: true,
+          message: `User '${username}' not found`
         };
       }
-      await channel.menu('/ip/hotspot/user/remove')
-        .where('.id', existingUsers[0]['.id'])
-        .remove();
 
+      const userId = existingUsers[0]['.id'] || existingUsers[0].id;
+      await channel.menu('/ip/hotspot/user/remove').remove({ id: userId });
       return {
         success: true,
         message: "User removed successfully"
@@ -136,7 +138,7 @@ const manageMikrotikUser = async (data) => {
       errorDetails: error.stack,
       action: action,
       profileName: profileName,
-      username: data.username
+      username: username
     };
   }
 }
@@ -387,11 +389,11 @@ const deleteMikrotikProfile = async (platformID, profileName, host) => {
       .get();
 
     if (existingProfiles.length === 0) {
-      return { success: false, message: "Profile not found" };
+      return { success: true, message: "Profile not found" };
     }
 
     await channel.menu('/ip/hotspot/user/profile/remove')
-      .where('id', existingProfiles[0]['id']) // ✅ correct variable
+      .where('id', existingProfiles[0]['id'])
       .remove();
 
     return {
@@ -432,7 +434,7 @@ const fetchAddressPoolsFromConnections = async (req, res) => {
   if (!token) {
     return res.json({
       success: false,
-      message: "Missing credentials required 2!",
+      message: "Missing credentials required!",
     });
   }
   const auth = await AuthenticateRequest(token);
@@ -594,7 +596,7 @@ const fetchStations = async (req, res) => {
   if (!token) {
     return res.json({
       success: false,
-      message: "Missing credentials required 2!",
+      message: "Missing credentials required!",
     });
   }
   const auth = await AuthenticateRequest(token);
@@ -634,6 +636,228 @@ const fetchStations = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Error fetching stations.",
+    });
+  }
+};
+
+const fetchInterfaces = async (req, res) => {
+  const { token } = req.body;
+  if (!token) {
+    return res.json({
+      success: false,
+      message: "Missing credentials required!",
+    });
+  }
+
+  try {
+    const auth = await AuthenticateRequest(token);
+    if (!auth.success) {
+      return res.json({
+        success: false,
+        message: auth.message,
+      });
+    }
+
+    const platformID = auth.admin.platformID;
+    if (!platformID) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing platformID.",
+      });
+    }
+
+    const connections = await createMikrotikClient(token);
+    if (!connections) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid router connections.",
+      });
+    }
+    const validConnections = connections.filter(conn =>
+      conn.status === "Connected" && conn.channel
+    );
+
+    const results = [];
+
+    for (const conn of validConnections) {
+      const { id, host, username, channel } = conn;
+
+
+      const response = await channel.menu('/interface/print').get();
+      const interfaces = response.map(item => ({
+        name: item?.name || '',
+      }));
+      console.log("INterfaces fetched", response);
+
+      results.push({
+        id,
+        host,
+        username,
+        status: 'success',
+        data: {
+          interfaces
+        }
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Interfaces fetched successfully",
+      profiles: results
+    });
+  } catch (error) {
+    console.error("Error fetching interfaces:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching interfaces.",
+    });
+  }
+};
+
+const fetchPPPSecret = async (req, res) => {
+  const { token } = req.body;
+  if (!token) {
+    return res.json({
+      success: false,
+      message: "Missing credentials required!",
+    });
+  }
+
+  try {
+    const auth = await AuthenticateRequest(token);
+    if (!auth.success) {
+      return res.json({
+        success: false,
+        message: auth.message,
+      });
+    }
+
+    const platformID = auth.admin.platformID;
+    if (!platformID) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing platformID.",
+      });
+    }
+
+    const connections = await createMikrotikClient(token);
+    if (!connections) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid router connections.",
+      });
+    }
+    const validConnections = connections.filter(conn =>
+      conn.status === "Connected" && conn.channel
+    );
+
+    const results = [];
+
+    for (const conn of validConnections) {
+      const { id, host, username, channel } = conn;
+
+
+      const response = await channel.menu('/interface/print').get();
+      const interfaces = response.map(item => ({
+        name: item?.name || '',
+      }));
+      console.log("INterfaces fetched", response);
+
+      results.push({
+        id,
+        host,
+        username,
+        status: 'success',
+        data: {
+          interfaces
+        }
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Interfaces fetched successfully",
+      profiles: results
+    });
+  } catch (error) {
+    console.error("Error fetching interfaces:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching interfaces.",
+    });
+  }
+};
+
+const fetchPPPprofile = async (req, res) => {
+  const { token } = req.body;
+  if (!token) {
+    return res.json({
+      success: false,
+      message: "Missing credentials required!",
+    });
+  }
+
+  try {
+    const auth = await AuthenticateRequest(token);
+    if (!auth.success) {
+      return res.json({
+        success: false,
+        message: auth.message,
+      });
+    }
+
+    const platformID = auth.admin.platformID;
+    if (!platformID) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing platformID.",
+      });
+    }
+
+    const connections = await createMikrotikClient(token);
+    if (!connections) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid router connections.",
+      });
+    }
+    const validConnections = connections.filter(conn =>
+      conn.status === "Connected" && conn.channel
+    );
+
+    const results = [];
+
+    for (const conn of validConnections) {
+      const { id, host, username, channel } = conn;
+
+
+      const response = await channel.menu('/ppp/profile/print').get();
+      const interfaces = response.map(item => ({
+        name: item?.name || '',
+      }));
+      console.log("INterfaces fetched", response);
+
+      results.push({
+        id,
+        host,
+        username,
+        status: 'success',
+        data: {
+          interfaces
+        }
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Interfaces fetched successfully",
+      profiles: results
+    });
+  } catch (error) {
+    console.error("Error fetching interfaces:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching interfaces.",
     });
   }
 };
@@ -693,57 +917,54 @@ const updateAddressPool = async (req, res) => {
       });
     }
 
-    let stationClient = mikrotikClientCache[auth.admin.platformID];
-    if (!stationClient) {
-      stationClient = await createSingleMikrotikClient(auth.admin.platformID, poolData.station);
-      if (!stationClient) {
-        return res.status(400).json({
-          success: false,
-          message: "Failed to create MikroTik client",
-        });
-      }
-      mikrotikClientCache[auth.admin.platformID] = stationClient;
-    }
-
-    const channel = stationClient.channel;
-
-    try {
-      const existingPools = await channel.menu('/ip/pool').get();
-      const existingPool = existingPools.find(pool => pool.name === poolData.name);
-      const resultTemplate = { host: stationClient.host, username: stationClient.username };
-
-      if (existingPool) {
-        await channel.menu('/ip/pool').update(existingPool['.id'], {
-          name: poolData.name,
-          ranges: poolData.ranges,
-          comment: poolData.comment || ''
-        });
-
-        return res.status(200).json({
-          success: true,
-          message: `Pool '${poolData.name}' updated successfully`,
-          poolId: existingPool['.id']
-        });
-      } else {
-        const addedPool = await channel.menu('/ip/pool').add({
-          name: poolData.name,
-          ranges: poolData.ranges,
-          comment: poolData.comment || ''
-        });
-
-        return res.status(200).json({
-          success: true,
-          message: `Pool '${poolData.name}' added successfully`,
-          poolId: addedPool['.id']
-        });
-      }
-    } catch (error) {
-      console.error("Error processing pool:", error);
-      return res.status(500).json({
+    const connection = await createSingleMikrotikClient(auth.admin.platformID, poolData.station);
+    if (!connection) {
+      return res.status(400).json({
         success: false,
-        message: `Failed to process pool: ${error.message}`
+        message: "Failed to create MikroTik client",
       });
     }
+
+    const channel = connection.channel;
+    const existingPools = await channel.menu('/ip/pool').get();
+    const existingPool = existingPools.find(pool => pool.name === poolData.name);
+
+    if (existingPool) {
+      // await channel.menu('/ip/pool').update(existingPool['.id'], {
+      //   name: poolData.name,
+      //   ranges: poolData.ranges,
+      //   comment: poolData.comment || ''
+      // });
+
+      await channel.menu('/ip/pool').remove({
+        id: existingPool['.id']
+      });
+
+      const addedPool = await channel.menu('/ip/pool').add({
+        name: poolData.name,
+        ranges: poolData.ranges,
+        comment: poolData.comment || ''
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: `Pool '${poolData.name}' updated successfully`,
+        poolId: existingPool['.id']
+      });
+    } else {
+      const addedPool = await channel.menu('/ip/pool').add({
+        name: poolData.name,
+        ranges: poolData.ranges,
+        comment: poolData.comment || ''
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: `Pool '${poolData.name}' added successfully`,
+        poolId: addedPool['.id']
+      });
+    }
+
   } catch (error) {
     console.error("Error in update Address Pool:", error);
     return res.status(500).json({
@@ -782,67 +1003,29 @@ const deleteAddressPool = async (req, res) => {
     }
 
     // Get connections
-    const connections = await createMikrotikClient(token);
-    if (!connections || !connections.length) {
+    const connection = await createSingleMikrotikClient(auth.admin.platformID, poolData.station);
+    if (!connection) {
       return res.status(400).json({
         success: false,
-        message: "No router connections available",
+        message: "Failed to create MikroTik client",
       });
     }
 
-    const validConnections = connections.filter(conn =>
-      conn.status === "Connected" && conn.channel
-    );
-
-    if (!validConnections.length) {
-      return res.status(400).json({
-        success: false,
-        message: "No valid router connections available",
-      });
+    const channel = connection.channel;
+    const existingPools = await channel.menu('/ip/pool').get();
+    const existingPool = existingPools.find(pool => pool.name === poolData.name);
+    if (!existingPool) {
+      return {
+        success: true,
+        message: `Pool '${poolName}' not found`
+      };
     }
 
-    // Process each connection
-    const results = await Promise.all(
-      validConnections.map(async (conn) => {
-        const { id, host, username, channel } = conn;
-        const resultTemplate = { id, host, username };
-
-        try {
-          const existingPools = await channel.menu('/ip/pool').get();
-          const poolToDelete = existingPools.find(pool => pool.name === poolName);
-          if (!poolToDelete) {
-            return {
-              ...resultTemplate,
-              status: 'not_found',
-              data: null,
-              message: `Pool '${poolName}' not found`
-            };
-          }
-
-          // Delete the pool
-          await channel.menu('/ip/pool').remove(poolToDelete['.id']);
-          return {
-            ...resultTemplate,
-            status: 'deleted',
-            data: { poolName },
-            message: `Pool '${poolName}' deleted successfully`,
-            poolId: poolToDelete['.id']
-          };
-        } catch (error) {
-          return {
-            ...resultTemplate,
-            status: 'error',
-            data: null,
-            message: `Failed to delete pool: ${error.message}`
-          };
-        }
-      })
-    );
-
+    // Delete the pool
+    await channel.menu('/ip/pool').remove({ id: existingPool['.id'] });
     return res.status(200).json({
       success: true,
-      message: "Address pool deletion completed",
-      results
+      message: `Pool '${poolName}' deleted successfully`,
     });
 
   } catch (error) {
@@ -854,6 +1037,115 @@ const deleteAddressPool = async (req, res) => {
     });
   }
 };
+
+const updateMikrotikPPPoE = async (req, res) => {
+  const {
+    station,
+    clientname,
+    clientpassword,
+    profile,
+    interface,
+    name,
+    pool,
+    price,
+    maxsessions,
+    servicename,
+    period,
+    id,
+    token,
+    localaddress,
+    DNSserver,
+    speed
+  } = req.body;
+  if (!token) {
+    return res.json({
+      success: false,
+      message: "Missing credentials required!",
+    });
+  }
+
+  try {
+    const auth = await AuthenticateRequest(token);
+    if (!auth.success) {
+      return res.json({
+        success: false,
+        message: auth.message,
+      });
+    }
+
+    const platformID = auth.admin.platformID;
+    if (!platformID) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing platformID.",
+      });
+    }
+
+    let connection;
+    connection = await createMikrotikConnection(host, username, password);
+
+    if (!connection?.channel) {
+      throw new Error("Failed to connect to MikroTik");
+    }
+
+    const { channel } = connection;
+
+    let uptimeLimit = '';
+    if (period) {
+      uptimeLimit = formatUptime(period);
+    }
+
+    const rateLimit = `${speed}M/${speed}M`;
+
+    // Handle PPP Profile creation/update
+    const profilexists = await channel.menu('/ppp/profile/print')
+      .where('name', profile)
+      .get();
+
+    if (profilexists.length === 0) {
+      await channel.menu('/ppp/profile/add').create({
+        name: profile,
+        'local-address': localaddress,
+        'dns-server': DNSserver,
+        'rate-limit': rateLimit,
+      });
+    }
+
+    // Handle PPP Secret update
+    const existingSecret = await channel.menu('/ppp/secret/print')
+      .where('name', clientname)
+      .get();
+
+    const secretParams = {
+      name: clientname,
+      password: clientpassword,
+      service: 'pppoe',
+      profile: profile,
+      'limit-sessions': maxsessions,
+      interface: interface
+    };
+
+    if (existingSecret.length > 0) {
+      await channel.menu('/ppp/secret/set')
+        .where('.id', existingSecret[0]['.id'])
+        .update(secretParams);
+    } else {
+      await channel.menu('/ppp/secret/add')
+        .create(secretParams);
+    }
+
+    return { success: true, message: "PPPoE client updated successfully" };
+  } catch (error) {
+    console.error('PPPoE update error:', error);
+    return {
+      success: false,
+      message: error.message,
+      errorDetails: error.stack
+    };
+  } finally {
+    if (connection) connection.close();
+  }
+}
 
 const formatMikrotikTime = (mikrotikTime) => {
   return mikrotikTime
@@ -879,4 +1171,6 @@ module.exports = {
   fetchMikrotikProfiles,
   updateAddressPool,
   deleteAddressPool,
+  fetchInterfaces,
+  fetchPPPprofile
 };

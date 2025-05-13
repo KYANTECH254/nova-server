@@ -4,6 +4,7 @@ const { exec } = require("child_process");
 const path = require("path");
 const moment = require("moment");
 const {
+  getPlatformByID,
   getPackages,
   getCodesByPhone,
   getCodesByMpesa,
@@ -65,6 +66,7 @@ const { EmailTemplate } = require("../mailer/mailerTemplates")
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const { platform } = require('process');
+const PAYSTACK_secretKey = process.env.PAYSTACK_SECRET_KEY;
 
 
 const generateToken = (adminID, platformID) => {
@@ -1026,12 +1028,12 @@ const fetchSettings = async (req, res) => {
       mpesaConsumerKey: "",
       mpesaConsumerSecret: "",
       mpesaShortCode: "",
-      mpesaShortCodeType: "Till",
+      mpesaShortCodeType: "Phone",
       mpesaPassKey: "",
       adminID: "",
-      IsC2B: false,
+      IsC2B: true,
       IsAPI: false,
-      IsB2B: true
+      IsB2B: false
     };
 
     return res.json({
@@ -1072,33 +1074,65 @@ const updateSettings = async (req, res) => {
     });
   }
   const { mpesaConsumerKey, mpesaConsumerSecret, mpesaShortCode, mpesaShortCodeType, mpesaAccountNumber, mpesaPassKey, IsC2B, IsAPI, IsB2B } = data;
-  if (IsC2B === true) {
-    if (!mpesaShortCode || !mpesaShortCodeType || !adminID) {
-      return res.json({
-        success: false,
-        message: "All MPESA fields must be filled out!",
-      });
-    }
-  } else if (IsAPI === true) {
-    if (!mpesaConsumerKey || !mpesaConsumerSecret || !mpesaShortCode || !mpesaShortCodeType || !mpesaPassKey || !adminID) {
-      return res.json({
-        success: false,
-        message: "All MPESA fields must be filled out!",
-      });
-    }
-  } else if (IsB2B === true) {
-    if (!mpesaShortCode || !mpesaShortCodeType || !adminID) {
-      return res.json({
-        success: false,
-        message: "All MPESA fields must be filled out!",
-      });
-    }
-  }
-
   try {
     const existingConfig = await getPlatformConfig(platformID);
+    if (IsC2B === true) {
+      if (!mpesaShortCode || !mpesaShortCodeType || !adminID) {
+        return res.json({
+          success: false,
+          message: "All MPESA fields must be filled out!",
+        });
+      }
+      const platform = await getPlatformByID(platformID);
+      if (!platform) {
+        return res.json({
+          success: false,
+          message: "Missing credentials required!",
+        });
+      }
+      const paystackdata = {
+        businessName: platform.name,
+        accountNumber: mpesaShortCode,
+        type: mpesaShortCodeType,
+        secretKey: PAYSTACK_secretKey,
+        idOrCode: existingConfig ? existingConfig.mpesaSubAccountID : ""
+      }
+      const existingpaystacksubaccount = await fetchSubaccount(paystackdata);
+      let subaccountMismatch;
+      if (existingpaystacksubaccount.success) {
+        subaccountMismatch = existingpaystacksubaccount.data.account_number !== mpesaShortCode;
+      }
+
+      if (!existingpaystacksubaccount.success || subaccountMismatch) {
+        const creeatepaystacksubaccount = await createMpesaSubaccount(paystackdata);
+        if (!creeatepaystacksubaccount.success) {
+          return res.json({
+            success: false,
+            message: creeatepaystacksubaccount.message,
+          });
+        }
+        const mpesaSubAccountCode = creeatepaystacksubaccount.data.subaccount_code;
+        const mpesaSubAccountID = creeatepaystacksubaccount.data.id;
+        data.mpesaSubAccountCode = mpesaSubAccountCode;
+        data.mpesaSubAccountID = `${mpesaSubAccountID}`;
+      }
+    } else if (IsAPI === true) {
+      if (!mpesaConsumerKey || !mpesaConsumerSecret || !mpesaShortCode || !mpesaShortCodeType || !mpesaPassKey || !adminID) {
+        return res.json({
+          success: false,
+          message: "All MPESA fields must be filled out!",
+        });
+      }
+    } else if (IsB2B === true) {
+      if (!mpesaShortCode || !mpesaShortCodeType || !adminID) {
+        return res.json({
+          success: false,
+          message: "All MPESA fields must be filled out!",
+        });
+      }
+    }
     if (!existingConfig) {
-      const add = createPlatformConfig(platformID, data);
+      const add = await createPlatformConfig(platformID, data);
       return res.json({
         success: true,
         message: "Platform Settings created.",
@@ -2238,7 +2272,7 @@ const deteteDDNSR = async (req, res) => {
       });
     }
   } catch (err) {
-    console.err("An error occured", err)
+    console.error("An error occured", err)
     return res.json({
       success: false,
       message: "An internal error occured, try again.",
@@ -2327,6 +2361,285 @@ const addReverseProxySite = async (domain, targetUrl, siteUser, siteUserPassword
   });
 };
 
+const createMpesaSubaccount = async (data) => {
+  const { businessName, accountNumber, type, secretKey } = data;
+  if (!businessName || !accountNumber || !type || !secretKey) {
+    return {
+      success: false,
+      message: "Missing business name, account number, type, or secret key.",
+    };
+  }
+
+  let paymentType = "";
+  if (type === "Till") {
+    paymentType = 799;
+  } else if (type === "Paybill") {
+    paymentType = 798;
+  } else if (type === "Phone") {
+    paymentType = 231;
+  } else {
+    return {
+      success: false,
+      message: "Invalid type. Must be 'Till', 'Paybill', or 'Phone'."
+    };
+  }
+
+  try {
+    // Step 1: Create subaccount
+    const response = await axios.post(
+      'https://api.paystack.co/subaccount',
+      {
+        business_name: businessName,
+        settlement_bank: paymentType,
+        account_number: accountNumber,
+        percentage_charge: 0,
+        currency: "KES"
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const subaccountData = response.data.data;
+    const subaccountId = subaccountData?.id;
+
+    if (!subaccountId) {
+      return {
+        success: false,
+        message: "Failed to retrieve subaccount ID after creation.",
+        data: subaccountData
+      };
+    }
+
+    let verified = false;
+    let verificationData = null;
+
+    try {
+      const jwt = process.env.PAYSTACK_TOKEN;
+
+      const verifyRes = await axios.post(
+        'https://api.paystack.co/subaccount/verify',
+        { ids: [subaccountId] },
+        {
+          headers: {
+            Authorization: `Bearer ${jwt}`,
+            'Content-Type': 'application/json',
+            'jwt-auth': 'true',
+          }
+        }
+      );
+
+      verified = verifyRes.data?.data?.verified_ids?.includes(subaccountId);
+      verificationData = verifyRes.data;
+      console.log("Verification result:", verifyRes.data);
+    } catch (verifyError) {
+      console.warn("Verification failed, continuing:", verifyError?.response?.data || verifyError.message);
+    }
+
+    return {
+      success: true,
+      message: verified
+        ? "Subaccount created and verified successfully."
+        : "Subaccount created but verification was skipped or failed.",
+      data: subaccountData,
+      verification: verificationData,
+    };
+  } catch (error) {
+    console.error("An error occurred:", error?.response?.data || error.message);
+    return {
+      success: false,
+      message: "An error occurred during subaccount creation.",
+      error: error?.response?.data || error.message
+    };
+  }
+};
+
+const fetchSubaccount = async (data) => {
+  const { secretKey, idOrCode } = data;
+
+  if (!idOrCode || !secretKey) {
+    return {
+      success: false,
+      message: "Missing subaccount ID/code or secret key."
+    };
+  }
+
+  try {
+    const response = await axios.get(
+      `https://api.paystack.co/subaccount/${idOrCode}`,
+      {
+        headers: {
+          Authorization: `Bearer ${secretKey}`
+        }
+      }
+    );
+
+    return {
+      success: true,
+      message: "Subaccount retrieved successfully.",
+      data: response.data.data
+    };
+  } catch (error) {
+    console.error("Error fetching subaccount:", error.response?.data || error.message);
+    return {
+      success: false,
+      message: error.response?.data?.message || "Failed to fetch subaccount.",
+      error: error
+    };
+  }
+}
+
+const updateSubaccount = async (data) => {
+  const { businessName, accountNumber, type, secretKey, idOrCode } = data;
+
+  if (!idOrCode || !businessName || !accountNumber || !type || !secretKey) {
+    return {
+      success: false,
+      message: "Missing business name, account number, type, or secret key.",
+    };
+  }
+
+  let paymentType = "";
+  if (type === "Till") {
+    paymentType = 799;
+  } else if (type === "Paybill") {
+    paymentType = 798;
+  } else if (type === "Phone") {
+    paymentType = 231;
+  } else {
+    return {
+      success: false,
+      message: "Invalid type. Must be 'Till', 'Paybill', or 'Phone'."
+    };
+  }
+
+  const updateData = {
+    business_name: businessName,
+    description: businessName,
+    bank_code: paymentType,
+    account_number: accountNumber,
+    percentage_charge: 0,
+    currency: "KES"
+  };
+
+  console.log("Updating paystack...", updateData, idOrCode);
+
+  try {
+    const response = await axios.put(
+      `https://api.paystack.co/subaccount/${idOrCode}`,
+      updateData, // ✅ Send object directly
+      {
+        headers: {
+          Authorization: `Bearer ${secretKey}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    return {
+      success: true,
+      message: "Subaccount updated successfully.",
+      data: response.data.data
+    };
+  } catch (error) {
+    console.error("Error updating subaccount:", error.response?.data || error.message);
+    return {
+      success: false,
+      message: error.response?.data?.message || "Failed to update subaccount.",
+      error: error
+    };
+  }
+};
+
+const removeUser = async = async (req, res) => {
+  const { id, username, token } = req.body;
+
+  if (!id || !username || !token) {
+    return res.json({
+      success: false,
+      message: "Missing credentials required!",
+    });
+  }
+
+  try {
+    const auth = await AuthenticateRequest(token);
+    if (!auth.success) {
+      return res.json({
+        success: false,
+        message: auth.message,
+      });
+    }
+    const platformID = auth.admin.platformID;
+    const stations = await getStations(platformID);
+    if (!stations) {
+      return res.json({
+        success: false,
+        message: "No routers found!",
+      });
+    }
+    const deleteuser = await deleteUser(id);
+    for (const station of stations) {
+      const userdata = {
+        platformID: platformID,
+        action: "remove",
+        profileName: "none",
+        host: station.mikrotikHost,
+        username: username
+      }
+      const removeuserfrommikrotik = await manageMikrotikUser(userdata)
+      if (!removeuserfrommikrotik.success) {
+        return res.json({
+          success: false,
+          message: removeuserfrommikrotik.message,
+        });
+      }
+    }
+    return res.json({
+      success: true,
+      message: "User deleted from Database and Mikrotik.",
+    })
+  } catch (err) {
+    console.error("An error occured", err)
+    return res.json({
+      success: false,
+      message: "An internal error occured, try again.",
+      error: err
+    });
+  }
+}
+
+const updatePPPoE = async (req, res) => {
+  const { token } = req.body;
+
+  if (!token) {
+    return res.json({
+      success: false,
+      message: "Missing credentials required!",
+    });
+  }
+
+  try {
+    const auth = await AuthenticateRequest(token);
+    if (!auth.success) {
+      return res.json({
+        success: false,
+        message: auth.message,
+      });
+    }
+    const platformID = auth.admin.platformID;
+  } catch (err) {
+    console.error("An error occured", err)
+    return res.json({
+      success: false,
+      message: "An internal error occured, try again.",
+      error: err
+    });
+  }
+}
+
 module.exports = {
   AuthenticateRequest,
   authAdmin,
@@ -2370,5 +2683,6 @@ module.exports = {
   checkIfUrlResolves,
   updateDDNSR,
   fetchDDNS,
-  deteteDDNSR
+  deteteDDNSR,
+  removeUser
 };

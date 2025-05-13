@@ -114,6 +114,8 @@ model PlatformSetting {
   mpesaAccountNumber  String?
   mpesaPassKey        String?
   mpesaPhone          String?
+  mpesaSubAccountCode String?
+  mpesaSubAccountID   String?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 }
@@ -152,3 +154,25 @@ model ddns {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 }
+
+model Pppoe {
+  id             String   @unique @default(uuid())
+  name           String
+  profile        String
+  servicename    String
+  station        String
+  pool           String
+  platformID     String
+  devices        String
+  price          String
+  usage          String?
+  period         String
+  status         String
+  clientname     String
+  clientpassword String
+  interface      String
+  maxsessions    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+

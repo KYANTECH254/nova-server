@@ -38,7 +38,8 @@ const {
   UpdateDDNSViaScript,
   fetchDDNS,
   updateDDNSR,
-  deteteDDNSR
+  deteteDDNSR,
+  removeUser
 ,} = require("../controllers/controller");
 
 // POST
@@ -78,6 +79,7 @@ router.post("/updateddns", UpdateDDNSViaScript);
 router.post("/fetchddns", fetchDDNS)
 router.post("/updatemyddns", updateDDNSR);
 router.post("/deletemyddns", deteteDDNSR)
+router.post("/deleteUser", removeUser)
 
 // GET
 router.get("/fetchPlatforms", fetchPlatforms);

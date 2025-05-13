@@ -569,6 +569,19 @@ async function getPlatform(platformID) {
   }
 }
 
+async function getPlatformByID(platformID) {
+  if (!platformID) return null;
+  try {
+    const platform = await prisma.platform.findUnique({
+      where: { platformID },
+    });
+    return platform;
+  } catch (error) {
+    console.error("Error getting platform:", error);
+    throw error;
+  }
+}
+
 async function getAdmin(adminID) {
   if (!adminID) return null;
   try {
@@ -1194,6 +1207,95 @@ async function deleteDDNS(id) {
   }
 }
 
+async function getPendingTransactions({ maxAgeMs }) {
+  const cutoff = Date.now() - maxAgeMs;
+
+  return prisma.mpesa.findMany({
+    where: {
+      status: {
+        not: 'COMPLETE'
+      },
+      createdAt: {
+        gte: new Date(cutoff)
+      }
+    }
+  });
+}
+
+async function createPPPoE(data) {
+  if (!data) return null;
+  try {
+    const created = await prisma.ddns.create({
+      data
+    })
+    return created;
+  } catch (error) {
+    console.error("An error occured:", error);
+    return null;
+  }
+}
+
+async function updatePPPoE(id, data) {
+  if (!data || !id) return null;
+  try {
+    const upd = await prisma.pppoe.update({
+      where: {
+        id
+      },
+      data
+    })
+    return upd;
+  } catch (error) {
+    console.error("An error occured:", error);
+    return null;
+  }
+}
+
+async function getPPPoE(platformID) {
+  if (!platformID) return null;
+  try {
+    const ddns = await prisma.ddns.findMany({
+      where: {
+        platformID
+      }
+    })
+    return ddns;
+  } catch (error) {
+    console.error("An error occured:", error);
+    return null;
+  }
+}
+
+async function getPPPoEById(id) {
+  if (!id) return null;
+  try {
+    const pppoe = await prisma.pppoe.findUnique({
+      where: {
+        id
+      }
+    })
+    return pppoe;
+  } catch (error) {
+    console.error("An error occured:", error);
+    return null;
+  }
+}
+
+async function deletePPPoE(id) {
+  if (!id) return null;
+  try {
+    const del = await prisma.pppoe.delete({
+      where: {
+        id
+      }
+    })
+    return del;
+  } catch (error) {
+    console.error("An error occured:", error);
+    return null;
+  }
+}
+
 
 module.exports = {
   getPlatformConfig,
@@ -1268,5 +1370,12 @@ module.exports = {
   deleteDDNS,
   getDDNSByUrl,
   getUserByCode,
-  getMpesaByCode
+  getMpesaByCode,
+  getPlatformByID,
+  getPendingTransactions,
+  createPPPoE,
+  updatePPPoE,
+  getPPPoE,
+  getPPPoEById,
+  deletePPPoE,
 };

@@ -22,12 +22,14 @@ const {
     getPackagesByAmount,
     getSuperAdminsByPlatform,
     getUserByCode,
-    getMpesaByCode
+    getMpesaByCode,
+    getPendingTransactions
 } = require("../../actions/operations");
 const { emitEvent } = require("../../socket/controllers/socketController");
 const { manageMikrotikUser, AuthenticateRequest } = require("../../mikrotik/contollers/mikrotikController");
 const { addManualCode } = require("../../controllers/mikrotikController");
 const { EmailTemplate } = require('../../mailer/mailerTemplates');
+const PAYSTACK_secretKey = process.env.PAYSTACK_SECRET_KEY;
 
 const getAccessToken = async (platform) => {
     try {
@@ -80,18 +82,55 @@ const stkPush = async (req, res) => {
         let checkoutRequestId;
 
         if (C2B) {
-            const apiUrl = "https://apicrane.tonightleads.com/api/mpesa-deposit/initiate";
-            const bodyData = {
-                mpesaNumber: formatPhoneNumber(phone),
+            // const apiUrl = "https://apicrane.tonightleads.com/api/mpesa-deposit/initiate";
+            // const bodyData = {
+            //     mpesaNumber: formatPhoneNumber(phone),
+            //     amount: amount,
+            //     paymentType: shortCodetype === "paybill" ? 'CustomerPayBillOnline' : 'CustomerBuyGoods',
+            //     tillOrPaybill: shortCode,
+            //     accountNumber: shortCodetype === "paybill" ? shortCode : '',
+            //     callback: process.env.MPESA_CALLBACK_URL,
+            //     token: "test-token",
+            // };
+            // response = await axios.post(apiUrl, bodyData);
+            // checkoutRequestId = response.data?.CheckoutRequestID;
+            // console.log("Subaccount code:", platform.mpesaSubAccountCode);
+
+            const response = await axios.post(
+                'https://api.paystack.co/transaction/initialize',
+                {
+                    email: `${phone}@novawifi.online`,
+                    amount: parseFloat(amount) * 100,
+                    subaccount: platform.mpesaSubAccountCode,
+                    callback_url: '',
+                    currency: "KES"
+                },
+                {
+                    headers: {
+                        Authorization: `Bearer ${PAYSTACK_secretKey}`,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            const mpesaCode = {
+                platformID: platformID,
                 amount: amount,
-                paymentType: shortCodetype === "paybill" ? 'CustomerPayBillOnline' : 'CustomerBuyGoods',
-                tillOrPaybill: shortCode,
-                accountNumber: shortCodetype === "paybill" ? shortCode : '',
-                callback: process.env.MPESA_CALLBACK_URL,
-                token: "test-token",
+                code: response.data.data.reference,
+                phone: phone,
+                status: "PENDING",
+                reqcode: response.data.data.reference
             };
-            response = await axios.post(apiUrl, bodyData);
-            checkoutRequestId = response.data?.CheckoutRequestID;
+            const addMpesaCodeTodb = await addMpesaCode(mpesaCode);
+            if (addMpesaCodeTodb) {
+                return res.status(200).json({
+                    type: "success",
+                    message: "STK Push initiated successfully",
+                    data: {
+                        checkoutRequestId: response.data.data.reference,
+                        authorization_url: response.data.data.authorization_url
+                    }
+                });
+            }
         } else if (API) {
             const accessToken = await getAccessToken(platform);
             const timestamp = moment().format('YYYYMMDDHHmmss');
@@ -563,7 +602,7 @@ const handleIntasendDepositCallback = async (req, res) => {
             emitEvent("deposit-success", {
                 status: state,
                 checkoutRequestId: invoice_id,
-                message: failed_reason,
+                message: "Payment successful!",
                 loginCode: addcodetorouter.code.username
             });
         } else {
@@ -656,6 +695,161 @@ const checkPayment = async (req, res) => {
     }
 }
 
+const handlePaystackDepositCallback = async (req, res) => {
+    return res.status(200).json({
+        success: true,
+        message: 'Webhook event received but ignored',
+    });
+
+    if (!verifyPaystackSignature(req)) {
+        return res.status(401).json({
+            success: false,
+            message: 'Invalid Paystack signature'
+        });
+    }
+
+    const event = req.body;
+    console.log("Deposit callback event:", event);
+
+    if (event.event === 'charge.success') {
+        const { reference, amount, currency, customer, subaccount } = event.data;
+
+        try {
+            const txVerify = await axios.get(`https://api.paystack.co/transaction/verify/${reference}`, {
+                headers: {
+                    Authorization: `Bearer ${PAYSTACK_secretKey}`
+                }
+            });
+
+            const txData = txVerify.data.data;
+
+            if (txData.status === 'success' && txData.currency === 'KES') {
+                // Credit user wallet or save to DB
+                const depositAmountKES = txData.amount / 100;
+
+                console.log("Customer:", customer.email);
+                console.log("Amount:", depositAmountKES, "KES");
+                console.log("Reference:", reference);
+                console.log("Subaccount:", subaccount);
+
+                // await creditUserWallet(customer.email, depositAmountKES);
+
+                return res.status(200).json({
+                    success: true,
+                    message: 'Customer deposit verified and processed successfully',
+                    data: {
+                        email: customer.email,
+                        reference,
+                        amount: depositAmountKES,
+                        currency: txData.currency,
+                        subaccount
+                    }
+                });
+            } else {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Transaction failed or currency mismatch',
+                    data: {
+                        reference,
+                        currency: txData.currency,
+                        status: txData.status
+                    }
+                });
+            }
+
+        } catch (error) {
+            console.error("Error verifying transaction:", error.response?.data || error.message);
+            return res.status(500).json({
+                success: false,
+                message: 'Error verifying transaction with Paystack',
+                error: error.response?.data || error.message
+            });
+        }
+    }
+
+    // Event is not charge.success — ignore
+    return res.status(200).json({
+        success: true,
+        message: 'Webhook event received but ignored',
+        event: event.event
+    });
+};
+
+const verifyPayments = async () => {
+    setInterval(async () => {
+        try {
+            const pendingTxs = await getPendingTransactions({ maxAgeMs: 60 * 60 * 1000 });
+            // console.log("Pending transactions:", pendingTxs);
+            for (const tx of pendingTxs) {
+                const { code } = tx;
+                try {
+                    const txVerify = await axios.get(`https://api.paystack.co/transaction/verify/${code}`, {
+                        headers: {
+                            Authorization: `Bearer ${PAYSTACK_secretKey}`
+                        }
+                    });
+                    const txData = txVerify.data.data;
+                    if (txData.status === 'success' && txData.currency === 'KES') {
+                        const depositAmountKES = txData.amount / 100;
+
+                        // console.log(`✅ Verified transaction: ${code} — ${depositAmountKES} KES`);
+                        await updateMpesaCode(code, { status: "COMPLETE", type: 'deposit', code: txData.receipt_number });
+                        const mpesaCode = await getMpesaCode(code);
+                        if (!mpesaCode) {
+                            return res.status(404).json({
+                                success: false,
+                                message: "MPesa code not found for the given invoice ID.",
+                            });
+                        }
+                        const pkg = await getPackagesByAmount(mpesaCode.platformID, `${depositAmountKES}`);
+                        if (!pkg) {
+                            return res.status(400).json({
+                                success: false,
+                                message: `Invalid package`,
+                                value: depositAmountKES
+                            });
+                        }
+                        const data = {
+                            phone: mpesaCode.phone,
+                            packageID: pkg.id,
+                            platformID: mpesaCode.platformID,
+                            package: pkg,
+                            code: code,
+                        }
+                        const addcodetorouter = await addManualCode(data);
+                        if (!addcodetorouter.success) {
+                            return res.status(400).json({
+                                success: false,
+                                message: `An error occured: ${addcodetorouter.message}`,
+                            });
+                        }
+
+                        emitEvent("deposit-success", {
+                            status: "COMPLETE",
+                            checkoutRequestId: invoice_id,
+                            message: "Payment successful",
+                            loginCode: addcodetorouter.code.username
+                        });
+                    } else if (['failed', 'reversed'].includes(txData.status)) {
+                        // console.log(`❌ Transaction ${code} failed. Updating DB.`);
+                        await updateMpesaCode(code, { status: "FAILED", type: 'deposit', });
+
+                        // emitEvent("deposit-status", {
+                        //     status: "FAILED",
+                        //     checkoutRequestId: code,
+                        //     message: "Payment failed"
+                        // });
+                    }
+                } catch (error) {
+                    console.error(`⏳ Error verifying ${code}:`, error.response?.data || error.message);
+                }
+            }
+        } catch (err) {
+            console.error("Error fetching pending transactions:", err.message);
+        }
+    }, 5 * 1000);
+}
+
 const validateWithdrawalAmount = (amount) => {
     if (!amount) return false;
     const num = parseFloat(amount);
@@ -681,6 +875,16 @@ const decodeBuffer = (data) => {
     return data;
 };
 
+const verifyPaystackSignature = (req) => {
+    const hash = crypto
+        .createHmac('sha512', PAYSTACK_secretKey)
+        .update(JSON.stringify(req.body))
+        .digest('hex');
+
+    return hash === req.headers['x-paystack-signature'];
+}
+
+verifyPayments();
 module.exports = {
     stkPush,
     callBack,
@@ -688,5 +892,6 @@ module.exports = {
     WithdrawFunds,
     handleIntasendCallback,
     handleIntasendDepositCallback,
-    checkPayment
+    checkPayment,
+    handlePaystackDepositCallback
 };
