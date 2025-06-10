@@ -1,0 +1,34 @@
+{
+  "name": "nova-server",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "nodemon --trace-warnings index.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@prisma/client": "^6.4.1",
+    "axios": "^1.9.0",
+    "bcrypt": "^5.1.1",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "http-proxy": "^1.18.1",
+    "http-proxy-middleware": "^3.0.5",
+    "intasend-node": "^1.1.2",
+    "jsonwebtoken": "^9.0.2",
+    "moment": "^2.30.1",
+    "node-cron": "^3.0.3",
+    "nodemailer": "^6.10.1",
+    "nodemon": "^3.1.9",
+    "routeros-client": "^1.1.1",
+    "socket.io": "^4.8.1"
+  },
+  "description": "",
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "prisma": "^6.9.0"
+  }
+}

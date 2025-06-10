@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String    @unique @default(uuid())
+  phone      String
+  username   String?
+  password   String?
+  status     String    @default("inactive")
+  code       String    @default("null")
+  token      String?   @default("null")
+  platformID String
+  packageID  String?
+  expireAt   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  package    Package?  @relation(fields: [packageID], references: [id])
+}
+
+model Mpesa {
+  id         String   @unique @default(uuid())
+  code       String   @unique
+  reqcode    String?
+  phone      String
+  till       String?
+  paybill    String?
+  account    String?
+  status     String
+  amount     String
+  platformID String
+  type       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Admin {
+  id         String   @unique @default(uuid())
+  name       String?
+  email      String   @unique
+  phone      String?
+  adminID    String
+  platformID String
+  role       String   @default("admin")
+  token      String   @unique
+  password   String   @default("null")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Package {
+  id         String   @unique @default(uuid())
+  name       String
+  period     String
+  price      String
+  speed      String
+  devices    String
+  usage      String
+  category   Category
+  adminID    String
+  platformID String
+  routerHost String
+  routerName String?
+  pool       String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  users      User[]
+}
+
+model SuperUser {
+  id        String   @unique @default(uuid())
+  name      String?
+  email     String   @unique
+  phone     String?
+  token     String   @unique
+  password  String   @default("null")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Platform {
+  id         String   @unique @default(uuid())
+  name       String
+  url        String   @unique
+  platformID String   @unique
+  adminID    String   @unique
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model PlatformSetting {
+  id                  String   @unique @default(uuid())
+  platformID          String   @unique
+  platformIP          String?
+  adminID             String
+  IsC2B               Boolean? @default(false)
+  IsAPI               Boolean? @default(false)
+  IsB2B               Boolean? @default(true)
+  mpesaConsumerKey    String?
+  mpesaConsumerSecret String?
+  mpesaShortCode      String?
+  mpesaShortCodeType  String?
+  mpesaAccountNumber  String?
+  mpesaPassKey        String?
+  mpesaPhone          String?
+  mpesaSubAccountCode String?
+  mpesaSubAccountID   String?
+  template            String?  @default("Nova Special")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model Station {
+  id                 String   @unique @default(uuid())
+  name               String
+  platformID         String
+  adminID            String
+  mikrotikHost       String?
+  mikrotikPublicHost String?
+  mikrotikUser       String?
+  mikrotikPassword   String?
+  mikrotikPublicKey  String?
+  mikrotikDDNS       String?
+  mikrotikWebfigHost String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Funds {
+  id          String   @unique @default(uuid())
+  balance     String
+  withdrawals String?
+  deposits    String?
+  platformID  String   @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ddns {
+  id         String   @unique @default(uuid())
+  url        String   @unique
+  publicIP   String?
+  platformID String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Pppoe {
+  id             String   @unique @default(uuid())
+  name           String
+  profile        String
+  servicename    String
+  station        String
+  pool           String
+  platformID     String
+  devices        String
+  price          String?
+  usage          String?
+  period         String?
+  status         String
+  clientname     String
+  clientpassword String
+  interface      String
+  maxsessions    String
+  email          String?
+  paymentLink    String?
+  expiresAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Template {
+  id        String   @unique @default(uuid())
+  name      String
+  url       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Category {
+  Daily
+  Weekly
+  Monthly
+}
