@@ -72,6 +72,15 @@ const bcrypt = require("bcrypt");
 const { platform } = require('process');
 const PAYSTACK_secretKey = process.env.PAYSTACK_SECRET_KEY;
 
+function generateRandomString() {
+  const length = 8;
+  const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
 
 const generateToken = (adminID, platformID) => {
   return jwt.sign({ adminID, platformID }, process.env.JWT_SECRET, {
@@ -267,8 +276,8 @@ const registerPlatform = async (req, res) => {
       });
     }
 
-    const siteUser = process.env.SITE_USER;
-    const siteUserPassword = process.env.SITE_PASSWORD;
+    const siteUser = generateRandomString();
+    const siteUserPassword = generateRandomString();
 
     if (!siteUser || !siteUserPassword) {
       return res.json({
@@ -308,7 +317,8 @@ const registerPlatform = async (req, res) => {
     });
 
     const newSettings = await createPlatformConfig(platformID, {
-      template: "Nova Special"
+      template: "Nova Special",
+      adminID: adminID
     })
 
     // Create platform
@@ -362,7 +372,8 @@ const registerPlatform = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: errorMessage
+      message: "An error occurred during registration",
+      error: error
     });
   }
 };
@@ -1256,8 +1267,8 @@ const updateName = async (req, res) => {
     const existingDnsName = existingPlatform.url.replace(/^https?:\/\//, '').split('/')[0];
     const newDnsName = url.replace(/^https?:\/\//, '').split('/')[0];
     if (newDnsName !== existingDnsName) {
-      const siteUser = process.env.SITE_USER;
-      const siteUserPassword = process.env.SITE_PASSWORD;
+      const siteUser = generateRandomString();
+      const siteUserPassword = generateRandomString();
 
       if (!siteUser || !siteUserPassword) {
         return res.json({
@@ -1723,8 +1734,8 @@ PersistentKeepalive = 10
               return res.json({ success: false, message: "WireGuard restart failed." });
             }
 
-            const siteUser = process.env.SITE_USER;
-            const siteUserPassword = process.env.SITE_PASSWORD;
+            const siteUser = generateRandomString();
+            const siteUserPassword = generateRandomString();
             if (!siteUser || !siteUserPassword) {
               return res.json({ success: false, message: "Internal error, missing critical configuration files, try again later" });
             }
