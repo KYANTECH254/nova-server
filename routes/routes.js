@@ -51,7 +51,8 @@ const {
   fetchAllTemplates,
   addTemplates,
   updateTemplates,
-  removeTemplates
+  removeTemplates,
+  updateMyPassword
   , } = require("../controllers/controller");
 
 // POST
@@ -104,6 +105,7 @@ router.post("/fetchAllTemplates", fetchAllTemplates)
 router.post("/addTemplate", addTemplates)
 router.post("/editTemplate", updateTemplates)
 router.post("/deleteTemplate", removeTemplates)
+router.post("/updateMyPassword", updateMyPassword)
 
 // GET
 router.get("/fetchPlatforms", fetchPlatforms);

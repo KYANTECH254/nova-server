@@ -3121,6 +3121,74 @@ const UpdatePassword = async (req, res) => {
   }
 };
 
+const updateMyPassword = async (req, res) => {
+  const { token, currentPassword, newPassword } = req.body;
+
+  if (!token || !currentPassword || !newPassword) {
+    return res.json({
+      success: false,
+      message: "Missing credentials required!",
+    });
+  }
+
+  if (newPassword.length < 6) {
+    return res.json({
+      success: false,
+      message: "Password must be at least 6 characters long.",
+    });
+  }
+
+  try {
+    const auth = await AuthenticateRequest(token);
+    if (!auth.success || !auth.admin) {
+      return res.json({
+        success: false,
+        message: auth.message,
+      });
+    }
+
+    const admin = auth.admin;
+    const isMatch = await bcrypt.compare(currentPassword, admin.password);
+    if (!isMatch) {
+      return res.json({
+        success: false,
+        message: "Current password is incorrect.",
+      });
+    }
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+    const upd = await updateAdmin(admin.id, { password: hashedPassword });
+
+    const subject = "Password updated!";
+    const message =
+      "Someone updated your account password.\nIf this was not you, update your password now.";
+
+    const data = {
+      name: admin.name,
+      type: "accounts",
+      email: admin.email,
+      subject,
+      message,
+    };
+
+    const sendresetemail = await EmailTemplate(data);
+    if (!sendresetemail.success) {
+      return res.status(200).json({
+        success: false,
+        message: sendresetemail.message,
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Password updated successfully!",
+    });
+  } catch (error) {
+    console.error("Error occurred:", error);
+    res.status(500).json({ success: false, message: "Internal server error." });
+  }
+};
+
 const UpdateProfile = async (req, res) => {
   const { token, name, phone } = req.body;
   if (!token || !name || !phone) {
@@ -3206,5 +3274,6 @@ module.exports = {
   fetchAllTemplates,
   addTemplates,
   updateTemplates,
-  removeTemplates
+  removeTemplates,
+  updateMyPassword
 };
