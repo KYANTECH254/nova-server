@@ -57,7 +57,19 @@ const {
   getPPPoE,
   getTemplates,
   getYesterdayRevenue,
-  getUniqueCode
+  getUniqueCode,
+  deletePlatformConfig,
+  deleteAdminsByPlatformId,
+  deleteUsersByplatformID,
+  deletePackagesByplatformID,
+  deleteStationsByplatformID,
+  deleteMpesaByplatformID,
+  deletDDNSByplatformID,
+  deletePPPoEByplatformID,
+  deleteFunds,
+  deleteTemplate,
+  editTemplate,
+  createTemplate
 } = require("../actions/operations");
 const { AuthenticateRequest } = require("../controllers/authController")
 const {
@@ -290,7 +302,8 @@ const registerPlatform = async (req, res) => {
     if (!addProxy.success) {
       return res.json({
         success: false,
-        message: "Reverse proxy creation failed."
+        message: "Reverse proxy creation failed.",
+        error: addProxy.error
       });
     }
 
@@ -380,20 +393,56 @@ const registerPlatform = async (req, res) => {
 
 const deletePlatformID = async (req, res) => {
   const { id } = req.body;
+
   if (!id) {
-    return res.json({
+    return res.status(400).json({
       success: false,
-      message: "Missing credentials are required!",
+      message: "Missing platform ID.",
     });
   }
+
   try {
-    const del = await deletePlatform(id);
-    return res.json({ success: true, message: "Platform deleted!" });
+    const platform = await getPlatformByID(id);
+
+    if (!platform) {
+      return res.status(404).json({
+        success: false,
+        message: "Platform not found.",
+      });
+    }
+
+    await deleteSiteRecord(platform.url);
+
+    const allddns = await getDDNS(platform.platformID);
+    for (const ddns of allddns) {
+      await removeDDNS(ddns.url);
+    }
+
+    await deletePlatformConfig(platform.platformID);
+    await deleteAdminsByPlatformId(platform.platformID);
+    await deleteUsersByplatformID(platform.platformID);
+    await deleteMpesaByplatformID(platform.platformID);
+    await deletePackagesByplatformID(platform.platformID);
+    await deleteStationsByplatformID(platform.platformID);
+    await deletDDNSByplatformID(platform.platformID);
+    await deletePPPoEByplatformID(platform.platformID);
+    await deleteFunds(platform.platformID);
+
+    await deletePlatform(id);
+
+    return res.status(200).json({
+      success: true,
+      message: "Platform deleted successfully.",
+    });
   } catch (error) {
-    console.log("An error occured", error);
-    return res.json({ success: false, message: "An error occured" });
+    console.error("An error occurred while deleting the platform:", error);
+    return res.status(500).json({
+      success: false,
+      message: "An error occurred while deleting the platform.",
+    });
   }
 };
+
 
 const fetchPlatforms = async (req, res) => {
   try {
@@ -998,9 +1047,11 @@ const deletePackages = async (req, res) => {
 
     let name = "";
     let url = "";
+    let platform_id = "";
     if (platform) {
       name = platform.name;
       url = platform.url;
+      platform_id = platform.id;
     }
 
     const platformSettings = settings || {
@@ -1062,7 +1113,7 @@ const updateSettings = async (req, res) => {
           message: "All MPESA fields must be filled out!",
         });
       }
-      const platform = await getPlatformByID(platformID);
+      const platform = await getPlatform(platformID);
       if (!platform) {
         return res.json({
           success: false,
@@ -2315,6 +2366,37 @@ const deteteDDNSR = async (req, res) => {
   }
 }
 
+const removeDDNS = async (url) => {
+  if (!url) {
+    return {
+      success: false,
+      message: "Missing credentials required!",
+    };
+  }
+
+  try {
+    const delfromcloudflare = await deleteCloudflareDNSRecord(url);
+    if (delfromcloudflare.success) {
+      return {
+        success: true,
+        message: "DDNS deleted successfully",
+      };
+    } else {
+      return {
+        success: false,
+        message: delfromcloudflare.message,
+      };
+    }
+  } catch (err) {
+    console.error("An error occured", err)
+    return {
+      success: false,
+      message: "An internal error occured, try again.",
+      error: err
+    };
+  }
+}
+
 const installLetsEncryptCert = async (domain) => {
   const cmd = `clpctl lets-encrypt:install:certificate --domainName=${domain}`;
 
@@ -2755,6 +2837,147 @@ const fetchTemplates = async (req, res) => {
   }
 }
 
+const fetchAllTemplates = async (req, res) => {
+  const { token } = req.body;
+
+  if (!token) {
+    return res.json({
+      success: false,
+      message: "Missing credentials required!",
+    });
+  }
+
+  try {
+    const auth = await AuthenticateRequest(token);
+    if (!auth.success) {
+      return res.json({
+        success: false,
+        message: auth.message,
+      });
+    }
+    const templates = await getTemplates();
+
+    return res.json({
+      success: true,
+      message: "Templates fetched succesfully!",
+      templates: templates,
+    });
+  } catch (err) {
+    console.error("An error occured", err)
+    return res.json({
+      success: false,
+      message: "An internal error occured, try again.",
+      error: err
+    });
+  }
+}
+
+const addTemplates = async (req, res) => {
+  const { token, name, url } = req.body;
+
+  if (!token || !url || !name) {
+    return res.json({
+      success: false,
+      message: "Missing credentials required!",
+    });
+  }
+
+  try {
+    const auth = await AuthenticateRequest(token);
+    if (!auth.success || !auth.superuser) {
+      return res.json({
+        success: false,
+        message: auth.message,
+      });
+    }
+
+    const template = await createTemplate({ name, url });
+
+    return res.json({
+      success: true,
+      message: "Template added succesfully!",
+      template: template,
+    });
+  } catch (err) {
+    console.error("An error occured", err)
+    return res.json({
+      success: false,
+      message: "An internal error occured, try again.",
+      error: err
+    });
+  }
+}
+
+const updateTemplates = async (req, res) => {
+  const { token, id, name, url } = req.body;
+
+  if (!token || !id || !url || !name) {
+    return res.json({
+      success: false,
+      message: "Missing credentials required!",
+    });
+  }
+
+  try {
+    const auth = await AuthenticateRequest(token);
+    if (!auth.success || !auth.superuser) {
+      return res.json({
+        success: false,
+        message: auth.message,
+      });
+    }
+
+    const template = await editTemplate(id, { name, url });
+
+    return res.json({
+      success: true,
+      message: "Template updated succesfully!",
+      template: template,
+    });
+  } catch (err) {
+    console.error("An error occured", err)
+    return res.json({
+      success: false,
+      message: "An internal error occured, try again.",
+      error: err
+    });
+  }
+}
+
+const removeTemplates = async (req, res) => {
+  const { token, id } = req.body;
+
+  if (!token || !id) {
+    return res.json({
+      success: false,
+      message: "Missing credentials required!",
+    });
+  }
+
+  try {
+    const auth = await AuthenticateRequest(token);
+    if (!auth.success || !auth.superuser) {
+      return res.json({
+        success: false,
+        message: auth.message,
+      });
+    }
+
+    const template = await deleteTemplate(id);
+    return res.json({
+      success: true,
+      message: "Template deleted succesfully!",
+    });
+  } catch (err) {
+    console.error("An error occured", err)
+    return res.json({
+      success: false,
+      message: "An internal error occured, try again.",
+      error: err
+    });
+  }
+}
+
 const verifyCodes = async (req, res) => {
   const { code, platformID } = req.body;
   if (!code || !platformID) {
@@ -2979,5 +3202,9 @@ module.exports = {
   verifyCodes,
   ResetPassword,
   UpdatePassword,
-  UpdateProfile
+  UpdateProfile,
+  fetchAllTemplates,
+  addTemplates,
+  updateTemplates,
+  removeTemplates
 };

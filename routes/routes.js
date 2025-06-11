@@ -47,7 +47,11 @@ const {
   verifyCodes,
   ResetPassword,
   UpdatePassword,
-  UpdateProfile
+  UpdateProfile,
+  fetchAllTemplates,
+  addTemplates,
+  updateTemplates,
+  removeTemplates
   , } = require("../controllers/controller");
 
 // POST
@@ -96,6 +100,10 @@ router.post("/verifyCode", verifyCodes)
 router.post("/resetPassword", ResetPassword)
 router.post("/updatePassword", UpdatePassword)
 router.post("/updateProfile", UpdateProfile)
+router.post("/fetchAllTemplates", fetchAllTemplates)
+router.post("/addTemplate", addTemplates)
+router.post("/editTemplate", updateTemplates)
+router.post("/deleteTemplate", removeTemplates)
 
 // GET
 router.get("/fetchPlatforms", fetchPlatforms);

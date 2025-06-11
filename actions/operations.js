@@ -156,6 +156,54 @@ async function createSuperUser(data) {
   }
 }
 
+async function createTemplate(data) {
+  if (!data) return null;
+  try {
+    const template = await prisma.template.create({
+      data: {
+        ...data,
+      },
+    });
+    return template;
+  } catch (error) {
+    console.error("Error creating template:", error);
+    throw error;
+  }
+}
+
+async function deleteTemplate(id) {
+  if (!id) return null;
+  try {
+    const template = await prisma.template.delete({
+      where: {
+        id
+      }
+    });
+    return template;
+  } catch (error) {
+    console.error("Error deleting template:", error);
+    throw error;
+  }
+}
+
+async function editTemplate(id, data) {
+  if (!id || !data) return null;
+  try {
+    const template = await prisma.template.update({
+      where: {
+        id
+      },
+      data: {
+        ...data
+      }
+    });
+    return template;
+  } catch (error) {
+    console.error("Error updating template:", error);
+    throw error;
+  }
+}
+
 async function updateSuperUser(data) {
   if (!data) return null;
   try {
@@ -399,6 +447,98 @@ async function deleteAdmin(id) {
   }
 }
 
+async function deleteAdminsByPlatformId(platformID) {
+  if (!platformID) return null;
+  try {
+    const result = await prisma.admin.deleteMany({
+      where: { platformID },
+    });
+    return result;
+  } catch (error) {
+    console.error("Error deleting admins:", error);
+    throw error;
+  }
+}
+
+async function deleteUsersByplatformID(platformID) {
+  if (!platformID) return null;
+  try {
+    const result = await prisma.user.deleteMany({
+      where: { platformID },
+    });
+    return result;
+  } catch (error) {
+    console.error("Error deleting users:", error);
+    throw error;
+  }
+}
+
+async function deletePackagesByplatformID(platformID) {
+  if (!platformID) return null;
+  try {
+    const result = await prisma.package.deleteMany({
+      where: { platformID },
+    });
+    return result;
+  } catch (error) {
+    console.error("Error deleting packages:", error);
+    throw error;
+  }
+}
+
+
+async function deleteStationsByplatformID(platformID) {
+  if (!platformID) return null;
+  try {
+    const result = await prisma.package.deleteMany({
+      where: { platformID },
+    });
+    return result;
+  } catch (error) {
+    console.error("Error deleting stations:", error);
+    throw error;
+  }
+}
+
+async function deleteMpesaByplatformID(platformID) {
+  if (!platformID) return null;
+  try {
+    const result = await prisma.mpesa.deleteMany({
+      where: { platformID },
+    });
+    return result;
+  } catch (error) {
+    console.error("Error deleting mpesa:", error);
+    throw error;
+  }
+}
+
+async function deletDDNSByplatformID(platformID) {
+  if (!platformID) return null;
+  try {
+    const result = await prisma.ddns.deleteMany({
+      where: { platformID },
+    });
+    return result;
+  } catch (error) {
+    console.error("Error deleting ddns:", error);
+    throw error;
+  }
+}
+
+async function deletePPPoEByplatformID(platformID) {
+  if (!platformID) return null;
+  try {
+    const result = await prisma.pppoe.deleteMany({
+      where: { platformID },
+    });
+    return result;
+  } catch (error) {
+    console.error("Error deleting mpesa:", error);
+    throw error;
+  }
+}
+
 async function createPackage(data) {
   if (!data) return null;
   try {
@@ -571,11 +711,11 @@ async function getPlatform(platformID) {
   }
 }
 
-async function getPlatformByID(platformID) {
-  if (!platformID) return null;
+async function getPlatformByID(id) {
+  if (!id) return null;
   try {
     const platform = await prisma.platform.findUnique({
-      where: { platformID },
+      where: { id },
     });
     return platform;
   } catch (error) {
@@ -1444,5 +1584,15 @@ module.exports = {
   deletePPPoE,
   getTemplates,
   getYesterdayRevenue,
-  getUniqueCode
+  getUniqueCode,
+  deleteAdminsByPlatformId,
+  deleteUsersByplatformID,
+  deletePackagesByplatformID,
+  deleteStationsByplatformID,
+  deleteMpesaByplatformID,
+  deletDDNSByplatformID,
+  deletePPPoEByplatformID,
+  createTemplate,
+  deleteTemplate,
+  editTemplate
 };
