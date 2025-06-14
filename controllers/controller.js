@@ -3,6 +3,8 @@ const fs = require("fs");
 const { exec } = require("child_process");
 const path = require("path");
 const moment = require("moment");
+const dns = require('dns').promises;
+const { validateDdnsHost, isValidIP } = require('../utils/Functions');
 const {
   getPlatformByID,
   getPackages,
@@ -1019,8 +1021,39 @@ const deletePackages = async (req, res) => {
     return res.status(400).json({
       success: false, message: "Missing credentials required!",
     });
-  } try { const pkg = await getPackagesByID(id); if (!pkg) { return res.status(404).json({ success: false, message: "Package does not exist!", }); } const packagename = pkg.name; const delProfileResult = await deleteMikrotikProfile(platformID, packagename, host); if (!delProfileResult.success) { return res.status(500).json({ success: false, message: `Failed to delete MikroTik profile: ${delProfileResult.message}`, }); } const delResult = await deletePackage(id); if (!delResult) { return res.status(500).json({ success: false, message: "Failed to delete package from database.", }); } return res.json({ success: true, message: "Package deleted successfully." }); } catch (error) { console.error("An error occurred while deleting package:", error); return res.status(500).json({ success: false, message: "An internal server error occurred.", }); }
-}; const fetchSettings = async (req, res) => {
+  } try {
+    const pkg = await getPackagesByID(id);
+    if (!pkg) {
+      return res.status(404).json({ success: false, message: "Package does not exist!", });
+    }
+    const packagename = pkg.name;
+    const delProfileResult = await deleteMikrotikProfile(platformID, packagename, host);
+    if (!delProfileResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: `Failed to delete MikroTik profile: ${delProfileResult.message}`,
+      });
+    }
+    const delResult = await deletePackage(id);
+    if (!delResult) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to delete package from database.",
+      });
+    } return res.json({
+      success: true,
+      message: "Package deleted successfully."
+    });
+  } catch (error) {
+    console.error("An error occurred while deleting package:", error);
+    return res.status(500).json({
+      success: false,
+      message: "An internal server error occurred.",
+    });
+  }
+};
+
+const fetchSettings = async (req, res) => {
   const { token } = req.body; if (!token) {
     return res.json({
       success: false, message: "Missing credentials required!",
@@ -1072,6 +1105,7 @@ const deletePackages = async (req, res) => {
       name,
       url,
       settings: platformSettings,
+      platform_id
     });
   } catch (error) {
     console.log("An error occurred", error);
@@ -1752,6 +1786,10 @@ const updateStations = async (req, res) => {
     if (!endpointHost) {
       return res.json({ success: false, message: "Public router host is required." });
     }
+    const result = await resolveMikrotikHost(mikrotikPublicHost);
+    if (!result.success) {
+      return res.json({ success: false, message: result.message });
+    } 
 
     const peerBlock = `
 [Peer]
@@ -3217,6 +3255,36 @@ const UpdateProfile = async (req, res) => {
     res.status(500).json({ success: false, message: "Internal server error." });
   }
 };
+
+async function resolveMikrotikHost(mikrotikPublicHost) {
+  const endpointHost = mikrotikPublicHost;
+
+  if (!endpointHost) {
+    return { success: false, message: 'Public router host is required.' };
+  }
+
+  if (isValidIP(endpointHost)) {
+    return { success: true, host: endpointHost, addresses: [endpointHost] };
+  }
+
+  if (validateDdnsHost(endpointHost)) {
+    try {
+      const addresses = await dns.resolve4(endpointHost);
+      return { success: true, host: endpointHost, addresses };
+    } catch (err) {
+      return {
+        success: false,
+        message: `Failed to resolve '${endpointHost}'. Make sure it points to a valid Public IP Address`,
+      };
+    }
+  }
+
+  return {
+    success: false,
+    message: 'Invalid host: must be a valid IP or hostname.',
+  };
+}
+
 
 module.exports = {
   AuthenticateRequest,

@@ -1055,7 +1055,8 @@ const updateMikrotikPPPoE = async (req, res) => {
     DNSserver,
     speed,
     email,
-    status
+    status,
+    paymentLink
   } = req.body;
 
   if (!token) {
@@ -1095,7 +1096,10 @@ const updateMikrotikPPPoE = async (req, res) => {
 
     const { channel } = connection;
     const rateLimit = speed ? `${speed}M/${speed}M` : '';
-    const paymentLink = Math.random().toString(36).substring(2, 15);
+    let pppoe_link = "";
+    if (!paymentLink) {
+      pppoe_link = Math.random().toString(36).substring(2, 15);
+    }
     // PPPoE Server Configuration
     const existingServers = await channel.menu('/ppp/pppoe-server/print').get();
     const existingServer = existingServers.find(s => s.interface === interfaceName);
@@ -1207,7 +1211,7 @@ const updateMikrotikPPPoE = async (req, res) => {
       interface: interfaceName,
       maxsessions,
       status,
-      paymentLink,
+      paymentLink: paymentLink ? paymentLink : pppoe_link,
       email
     };
 
@@ -1221,7 +1225,6 @@ const updateMikrotikPPPoE = async (req, res) => {
       });
 
     const result = await dbOperation;
-
     const platform = await getPlatform(platformID);
 
     if (email) {
@@ -1255,8 +1258,6 @@ const updateMikrotikPPPoE = async (req, res) => {
       success: false,
       message: error.message,
     });
-  } finally {
-    if (connection) connection.close();
   }
 };
 
